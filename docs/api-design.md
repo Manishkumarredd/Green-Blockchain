@@ -1,399 +1,139 @@
-# GreenLedger REST API Specification (v1)
+# GreenLedger REST API Specification (Phase 4 Edition)
 
-## 1. Protocol Conventions
+## 1. Protocol Architecture & Conventions
 
-- **Base URL**: `/api/v1`
-- **Format**: JSON (`Content-Type: application/json`)
+- **Base URL**: `/api/v1` (with `/api` compatibility alias)
+- **Data Exchange**: JSON (`Content-Type: application/json`)
 - **Authentication**: JWT Bearer Token passed via HTTP Header: `Authorization: Bearer <TOKEN>`
-- **Standard Success Response Envelope**:
-  ```json
-  {
-    "success": true,
-    "data": { ... }
+- **Security**: Helmet HTTP Headers, Strict CORS whitelist, Rate Limiting (200 req/15min on general APIs, 30 req/15min on Auth).
+- **Validation**: Strict schema enforcement using Zod.
+
+### 1.1. Standard Success Envelope
+```json
+{
+  "success": true,
+  "message": "Operation completed successfully",
+  "data": { ... },
+  "meta": {
+    "page": 1,
+    "limit": 10,
+    "total": 42,
+    "totalPages": 5
   }
-  ```
-- **Standard Error Response Envelope**:
-  ```json
-  {
-    "success": false,
-    "status": 400,
-    "error": "Descriptive error message"
-  }
-  ```
+}
+```
+
+### 1.2. Standard Error Envelope
+```json
+{
+  "success": false,
+  "error": "Validation failed: Total energy must be greater than 0",
+  "details": [
+    {
+      "field": "totalEnergyKwh",
+      "message": "Total energy must be greater than 0"
+    }
+  ]
+}
+```
 
 ---
 
-## 2. API Endpoints
+## 2. API Endpoints Directory
 
-### 2.1. System & Health
-#### `GET /health`
-Returns system status, active database connection mode, and configured Sepolia contract addresses.
-- **Access**: Public
-- **Response `200 OK`**:
-  ```json
-  {
-    "success": true,
-    "platform": "GreenLedger P2P Energy Trading API",
-    "version": "1.0.0",
-    "environment": "development",
-    "timestamp": "2026-11-16T13:30:00.000Z",
-    "uptimeSeconds": 1420,
-    "database": {
-      "connected": true,
-      "timestamp": "2026-11-16T13:30:00.000Z"
-    },
-    "blockchain": {
-      "network": "Ethereum Sepolia (ChainId: 11155111)",
-      "settlementContract": "0x...",
-      "certificateContract": "0x..."
-    }
-  }
-  ```
+### 2.1. Authentication & Identity (`/api/v1/auth`)
 
----
+| Method | Endpoint | Access | Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/auth/register` | Public (Rate Limited) | Register a new Producer or Consumer account with bcrypt hashing |
+| `POST` | `/api/v1/auth/login` | Public (Rate Limited) | Authenticate credentials and receive signed JWT token |
+| `POST` | `/api/v1/auth/logout` | Authenticated | Terminate session and confirm token invalidation |
+| `GET` | `/api/v1/auth/me` | Authenticated | Retrieve authenticated user profile and verified role |
+| `POST` | `/api/v1/auth/nonce` | Public | Generate cryptographic challenge for MetaMask Web3 signature |
+| `POST` | `/api/v1/auth/forgot-password`| Public | Neutral password reset dispatch without user enumeration |
 
-### 2.2. Authentication
-#### `POST /auth/wallet`
-Authenticates an Ethereum wallet address, issuing a JWT signed token with role-based permissions.
-- **Access**: Public
-- **Request Body**:
-  ```json
-  {
-    "walletAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-    "role": "PRODUCER",
-    "name": "Helios Solar Park"
-  }
-  ```
-- **Response `200 OK`**:
-  ```json
-  {
-    "success": true,
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "user": {
-      "id": 2,
-      "walletAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-      "role": "PRODUCER",
-      "name": "Helios Solar Park",
-      "meterId": "METER-PROD-SOL-101",
-      "reputationScore": 99.2
-    }
-  }
-  ```
+### 2.2. Producer Energy Management (`/api/v1/producers`)
+*Restricted strictly to authenticated users with role `PRODUCER`.*
 
-#### `GET /auth/me`
-Retrieves the authenticated user profile.
-- **Access**: Authenticated (`Bearer <TOKEN>`)
-- **Response `200 OK`**:
-  ```json
-  {
-    "success": true,
-    "user": {
-      "userId": 2,
-      "walletAddress": "0x7099...",
-      "role": "PRODUCER",
-      "meterId": "METER-PROD-SOL-101"
-    }
-  }
-  ```
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/v1/producers/listings` | Create a new renewable energy listing (Solar, Wind, Hydro, Biomass, Hybrid) |
+| `GET` | `/api/v1/producers/listings` | List all energy listings owned by the calling producer |
+| `GET` | `/api/v1/producers/listings/:id`| Retrieve details of a specific owned energy listing |
+| `PUT` | `/api/v1/producers/listings/:id`| Update pricing, status, or available kWh of an owned listing |
+| `DELETE` | `/api/v1/producers/listings/:id`| Safely delete or cancel a listing (guarded against active transactions) |
+| `GET` | `/api/v1/producers/dashboard` | Aggregated metrics: offered kWh, sold kWh, active listings, earnings in ETH |
 
----
+### 2.3. Consumer Demands & Allocations (`/api/v1/consumers`)
+*Restricted strictly to authenticated users with role `CONSUMER`.*
 
-### 2.3. Marketplace (Listings & Demands)
-#### `GET /market/listings`
-Fetches active energy listings sorted in merit-order (cheapest unit price first).
-- **Access**: Public
-- **Response `200 OK`**:
-  ```json
-  {
-    "success": true,
-    "count": 3,
-    "data": [
-      {
-        "id": 2,
-        "producer_id": 3,
-        "energy_source": "WIND",
-        "quantity_kwh": 300.0,
-        "available_kwh": 300.0,
-        "unit_price_eth": "0.00008200",
-        "status": "ACTIVE"
-      }
-    ]
-  }
-  ```
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/v1/consumers/requests` | Submit an energy demand request with priority weighting (Critical, Standard) |
+| `GET` | `/api/v1/consumers/requests` | Retrieve all energy requests submitted by the calling consumer |
+| `GET` | `/api/v1/consumers/allocations` | Query historical energy allocations received across market clearing cycles |
+| `GET` | `/api/v1/consumers/dashboard` | Aggregated metrics: total requested, fulfilled kWh, spent ETH, carbon avoided |
 
-#### `POST /market/listings`
-Allows a registered producer or admin to create an energy listing.
-- **Access**: Producer or Admin (`Bearer <TOKEN>`)
-- **Request Body**:
-  ```json
-  {
-    "energySource": "SOLAR",
-    "quantityKwh": 100.0,
-    "unitPriceEth": 0.000085,
-    "minPurchaseKwh": 5.0
-  }
-  ```
-- **Response `201 Created`**:
-  ```json
-  {
-    "success": true,
-    "data": {
-      "id": 11,
-      "producer_id": 2,
-      "energy_source": "SOLAR",
-      "quantity_kwh": 100.0,
-      "available_kwh": 100.0,
-      "unit_price_eth": "0.00008500",
-      "status": "ACTIVE"
-    }
-  }
-  ```
+### 2.4. Public Marketplace (`/api/v1/marketplace`)
 
-#### `GET /market/requests`
-Retrieves pending energy purchase requests submitted by consumers.
-- **Access**: Public
-- **Response `200 OK`**:
-  ```json
-  {
-    "success": true,
-    "count": 3,
-    "data": [
-      {
-        "id": 1,
-        "consumer_id": 6,
-        "requested_kwh": 80.0,
-        "max_acceptable_price_eth": "0.00012000",
-        "priority_weight": 2.0,
-        "urgency_level": "HIGH",
-        "status": "PENDING"
-      }
-    ]
-  }
-  ```
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/v1/marketplace/listings` | Query active listings with search, source filtering, price range, and pagination |
+| `GET` | `/api/v1/marketplace/listings/:id` | View detailed listing specifications, producer meter ID, and reputation score |
 
-#### `POST /market/requests`
-Submits a consumer energy demand order.
-- **Access**: Consumer or Admin (`Bearer <TOKEN>`)
-- **Request Body**:
-  ```json
-  {
-    "requestedKwh": 50.0,
-    "maxPriceEth": 0.000095,
-    "priorityWeight": 1.5,
-    "urgencyLevel": "NORMAL"
-  }
-  ```
-- **Response `201 Created`**:
-  ```json
-  {
-    "success": true,
-    "data": {
-      "id": 12,
-      "consumer_id": 5,
-      "requested_kwh": 50.0,
-      "allocated_kwh": 0.0,
-      "max_acceptable_price_eth": "0.00009500",
-      "priority_weight": 1.5,
-      "status": "PENDING"
-    }
-  }
-  ```
+**Query Parameters for `GET /listings`:**
+- `search`: Filter by producer name or energy source keyword.
+- `energySource`: `SOLAR`, `WIND`, `HYDRO`, `BIOMASS`, `HYBRID`.
+- `minPrice` / `maxPrice`: Numerical price boundaries in ETH/kWh.
+- `minEnergy`: Minimum available capacity in kWh.
+- `sortBy`: `price_asc`, `price_desc`, `quantity_asc`, `quantity_desc`, `created_desc`.
+- `page`: Page index (default: 1).
+- `limit`: Items per page (default: 10, max: 100).
 
-#### `GET /market/pricing/quote`
-Queries the rule-based dynamic pricing engine for tariff recommendations.
-- **Access**: Public
-- **Query Params**: `energySource=SOLAR&hourOfDay=14`
-- **Response `200 OK`**:
-  ```json
-  {
-    "success": true,
-    "quote": {
-      "baseTariffEth": 0.0001,
-      "recommendedPriceEth": 0.000092,
-      "touMultiplier": 1.0,
-      "supplyDemandRatio": 0.6,
-      "imbalanceIndex": -0.25,
-      "isPeakHour": false,
-      "priceFloorEth": 0.00004,
-      "priceCeilingEth": 0.00025
-    }
-  }
-  ```
+### 2.5. Allocation Algorithm Module (`/api/v1/allocation`)
 
-#### `GET /market/simulation/feed`
-Retrieves mathematical simulation telemetry for solar irradiance, wind speed, and hydro capacity.
-- **Access**: Public
-- **Response `200 OK`**:
-  ```json
-  {
-    "success": true,
-    "simulationTimestamp": "2026-11-16T13:30:00.000Z",
-    "hourOfDay": 14,
-    "sources": {
-      "solar": { "outputKwh": 86.4, "solarIrradianceWm2": 890.2, "tempC": 28 },
-      "wind": { "outputKwh": 142.1, "windSpeedMs": 8.5, "turbineState": "GENERATING" },
-      "hydro": { "outputKwh": 70.0, "flowRateM3s": 3.5, "headM": 25 }
-    }
-  }
-  ```
+| Method | Endpoint | Access | Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/allocation/execute` | Admin | Execute allocation cycle across pending consumer demands and active supply |
+| `GET` | `/api/v1/allocation/results` | Authenticated | Retrieve historical allocation cycle execution runs |
+| `GET` | `/api/v1/allocation/results/:id`| Authenticated | Inspect itemized consumer fulfillment ratios and unfulfilled demand |
+| `GET` | `/api/v1/allocation/compare` | Authenticated | Benchmark comparison: FCFS vs. Basic Proportional vs. Proposed Weighted |
 
----
+### 2.6. Rule-Based Dynamic Pricing (`/api/v1/pricing`)
 
-### 2.4. Settlement & Matching
-#### `POST /settlement/match`
-Executes an off-chain double auction matching and proportional allocation cycle.
-- **Access**: Admin (`Bearer <TOKEN>`)
-- **Response `200 OK`**:
-  ```json
-  {
-    "success": true,
-    "cycle": {
-      "cycleNumber": 1731765000000,
-      "totalDemandKwh": 330.0,
-      "totalSupplyKwh": 550.0,
-      "matchedTradesCount": 3,
-      "matchedTrades": [
-        {
-          "tradeHash": "0x4f87ab...",
-          "listingId": 1,
-          "requestId": 1,
-          "producerId": 2,
-          "consumerId": 6,
-          "energyAmountKwh": 80.0,
-          "unitPriceEth": 0.000088,
-          "totalCostEth": 0.00704,
-          "carbonSavedKg": 62.32,
-          "status": "PENDING_ON_CHAIN_SETTLEMENT"
-        }
-      ]
-    },
-    "summary": {
-      "totalMatchedEnergyKwh": 330.0,
-      "totalTradeValueEth": 0.0285,
-      "matchedCount": 3
-    }
-  }
-  ```
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/v1/pricing/current` | Real-time pricing snapshot based on current grid time-of-use and supply/demand |
+| `POST` | `/api/v1/pricing/calculate` | Compute dynamic price formula recommendation based on supply/demand inputs |
+| `GET` | `/api/v1/pricing/history` | Retrieve historical dynamic price audit log and clearing records |
 
-#### `GET /settlement/history`
-Returns historical trade settlements.
-- **Access**: Authenticated (`Bearer <TOKEN>`)
-- **Response `200 OK`**:
-  ```json
-  {
-    "success": true,
-    "count": 1,
-    "data": [
-      {
-        "id": 1,
-        "trade_hash": "0x4f87ab...",
-        "producer_id": 2,
-        "consumer_id": 6,
-        "energy_amount_kwh": 80.0,
-        "unit_price_eth": "0.00008800",
-        "total_amount_eth": "0.00704000",
-        "carbon_saved_kg": 65.6,
-        "settlement_status": "ON_CHAIN_SETTLED",
-        "tx_hash": "0x9a8f3b...",
-        "block_number": 5839210
-      }
-    ]
-  }
-  ```
+### 2.7. Settlement & Energy Transactions (`/api/v1/transactions`)
 
----
+| Method | Endpoint | Access | Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/transactions` | Consumer | Settle energy purchase: ACID transaction with row-level locking & overselling guard |
+| `GET` | `/api/v1/transactions` | Authenticated | Query transactions filtered by role (Producers see sales, Consumers see purchases) |
+| `GET` | `/api/v1/transactions/:id` | Authenticated | View transaction details, carbon record, and blockchain transaction hash |
+| `GET` | `/api/v1/transactions/history`| Authenticated | Retrieve transaction history log with status breakdown |
 
-### 2.5. Certificates & Carbon
-#### `GET /certificates`
-Lists issued Renewable Energy Certificates (RECs).
-- **Access**: Public
-- **Response `200 OK`**:
-  ```json
-  {
-    "success": true,
-    "count": 1,
-    "data": [
-      {
-        "id": 1,
-        "token_id": 1,
-        "owner_address": "0x9965...",
-        "producer_address": "0x7099...",
-        "energy_amount_kwh": 80.0,
-        "carbon_offset_kg": 65.6,
-        "energy_source": "SOLAR",
-        "is_retired": false
-      }
-    ]
-  }
-  ```
+### 2.8. Carbon Savings & Green Certificates (`/api/v1/carbon`, `/api/v1/certificates`)
 
-#### `GET /certificates/verify/:tokenId`
-Verifies the cryptographic validity and retirement status of an REC token.
-- **Access**: Public
-- **Response `200 OK`**:
-  ```json
-  {
-    "success": true,
-    "isValid": true,
-    "certificate": {
-      "token_id": 1,
-      "energy_amount_kwh": 80.0,
-      "carbon_offset_kg": 65.6,
-      "energy_source": "SOLAR",
-      "is_retired": false
-    }
-  }
-  ```
+| Method | Endpoint | Access | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/carbon/summary` | Public | Cumulative clean energy traded, carbon avoided (kg CO2), and tree equivalent |
+| `GET` | `/api/v1/carbon/records` | Authenticated | Itemized user carbon offset records linked to completed settlements |
+| `GET` | `/api/v1/certificates` | Authenticated | Query Green Renewable Energy Certificates (GL-REC) |
+| `GET` | `/api/v1/certificates/:id` | Authenticated | Inspect certificate ownership, energy volume, and cryptographic proofs |
+| `GET` | `/api/v1/certificates/verify/:id`| Public | Public verification of certificate validity, authenticity, and status |
+| `POST` | `/api/v1/certificates/issue` | Authenticated | Issue ERC-721 certificate representation for confirmed settlement |
 
-#### `GET /certificates/calculate-offsets`
-Computes GHG reduction metrics for any arbitrary energy quantity.
-- **Access**: Public
-- **Query Params**: `energyKwh=100&energySource=SOLAR`
-- **Response `200 OK`**:
-  ```json
-  {
-    "success": true,
-    "carbonMetrics": {
-      "energyAmountKwh": 100.0,
-      "energySource": "SOLAR",
-      "gridBaselineKgPerKwh": 0.82,
-      "sourceFactorKgPerKwh": 0.041,
-      "carbonSavedKg": 77.9,
-      "carbonSavedGrams": 77900,
-      "equivalencies": {
-        "treesPlantedEquivalentYear": 3.58,
-        "gasolineLitersAvoided": 33.72,
-        "carKmAvoided": 649.17
-      }
-    }
-  }
-  ```
+### 2.9. Administrator Management (`/api/v1/admin`)
+*Strictly restricted to authenticated users with role `ADMIN`.*
 
----
-
-### 2.6. Administration
-#### `GET /admin/users`
-Lists all registered platform participants.
-- **Access**: Admin (`Bearer <TOKEN>`)
-
-#### `GET /admin/pricing-parameters`
-Fetches global dynamic pricing parameters.
-- **Access**: Admin (`Bearer <TOKEN>`)
-
-#### `GET /admin/stats`
-Platform aggregate volume and carbon offset analytics.
-- **Access**: Public
-- **Response `200 OK`**:
-  ```json
-  {
-    "success": true,
-    "stats": {
-      "totalParticipants": 7,
-      "totalEnergyTradedKwh": 48500.0,
-      "totalEthVolume": 4.8453,
-      "totalCarbonSavedKg": 34030.0,
-      "activeListingsCount": 3,
-      "pendingRequestsCount": 3
-    }
-  }
-  ```
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/v1/admin/dashboard` | Platform KPI stats: volume, carbon avoided, active listings, user counts |
+| `GET` | `/api/v1/admin/users` | Platform user directory with role, smart meter ID, and account status |
+| `GET` | `/api/v1/admin/transactions` | Global ledger of all platform energy trades |
+| `GET` | `/api/v1/admin/listings` | Comprehensive directory of all producer energy listings |
+| `PUT` | `/api/v1/admin/settings` | Update global parameters (base grid tariff, commission rate, emission factor) |

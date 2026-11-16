@@ -2,10 +2,11 @@
 
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.24-363636?logo=solidity)](https://soliditylang.org/)
 [![Ethereum Sepolia](https://img.shields.io/badge/Network-Sepolia%20Testnet-blue?logo=ethereum)](https://sepolia.etherscan.io/)
-[![Next.js](https://img.shields.io/badge/Next.js-15.1.7-black?logo=next.js)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-15.5-black?logo=next.js)](https://nextjs.org/)
 [![Express.js](https://img.shields.io/badge/Express.js-4.21.2-lightgrey?logo=express)](https://expressjs.com/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15%2B-336791?logo=postgresql)](https://www.postgresql.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16%2B-336791?logo=postgresql)](https://www.postgresql.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Tests Passing](https://img.shields.io/badge/Tests-35%2F35%20Passing-brightgreen)](backend/src/tests)
 
 ---
 
@@ -26,208 +27,114 @@
 ```
 GreenLed/
 ├── frontend/                     # Next.js 15 Web3 Client Application
-│   ├── app/                      # App router (layout, globals.css, home page)
-│   ├── components/               # UI components, layout shells, common elements
-│   ├── features/                 # Domain modules: producer, consumer, admin, marketplace
-│   ├── hooks/                    # Custom React and Web3 hooks
-│   ├── lib/                      # Wagmi/Viem configuration and API client
-│   ├── services/                 # Frontend client service abstractions
-│   ├── public/                   # Static assets and icons
-│   ├── styles/                   # Additional CSS styles
-│   ├── package.json              # Frontend dependencies (React 19, Tailwind, Recharts, Wagmi)
-│   ├── tsconfig.json             # TypeScript configuration
-│   ├── next.config.mjs           # Next.js bundler settings
-│   └── tailwind.config.js        # Tailwind CSS palette and styles
+│   ├── app/                      # Next.js App Router (Landing, Login, Register, Dashboards)
+│   ├── components/               # 22 Reusable UI components & layouts (Public, Auth, Dashboard)
+│   ├── services/                 # api.ts (Fully-typed frontend API client)
+│   ├── hooks/                    # Custom hooks (useMetaMask Web3 authentication)
+│   └── tailwind.config.js        # Design tokens & color system
 │
 ├── backend/                      # Node.js & Express.js REST API
 │   ├── src/
-│   │   ├── config/               # DB connection pool (PostgreSQL + Mock fallback) & env
-│   │   ├── controllers/          # Controllers for health, auth, market, settlement, certs, admin
-│   │   ├── middleware/           # JWT auth, role authorization, validation, error handler
-│   │   ├── models/               # Domain data models & query mappings
-│   │   ├── routes/               # Modular Express API route endpoints
-│   │   ├── services/             # Physical renewable energy simulation engine
-│   │   ├── algorithms/           # Core algorithmic engines:
-│   │   │   ├── allocation.js     # Demand-aware weighted proportional allocation
-│   │   │   ├── matching.js       # Price-aware greedy merit-order double auction
-│   │   │   ├── pricing.js        # Rule-based Time-of-Use & scarcity dynamic pricing
-│   │   │   └── carbon.js         # Avoided GHG emissions & baseline comparison
-│   │   ├── tests/                # Unit test suites using Node.js built-in test runner
-│   │   ├── app.js                # Express app setup and middleware pipeline
+│   │   ├── config/               # db.js (PostgreSQL pool + dual-mode in-memory repository) & migrate.js
+│   │   ├── controllers/          # Controllers: Auth, User, Producer, Consumer, Marketplace, Allocation, Pricing, Transaction, Carbon, Certificate, Admin
+│   │   ├── middleware/           # authMiddleware, roleMiddleware, validationMiddleware, rateLimitMiddleware, errorMiddleware
+│   │   ├── routes/               # Modular Express routes: auth, user, producer, consumer, marketplace, allocation, pricing, transaction, carbon, certificate, admin
+│   │   ├── services/             # Domain services layer with ACID concurrency controls
+│   │   ├── algorithms/           # Core algorithmic engines (Allocation, Matching, Dynamic Pricing, Carbon)
+│   │   ├── validators/           # Zod schema definitions
+│   │   ├── tests/                # Automated unit & integration tests (35 passing tests)
+│   │   ├── app.js                # Express app setup and route pipeline
 │   │   └── server.js             # HTTP server entrypoint
-│   └── package.json              # Backend dependencies
+│   └── package.json
 │
 ├── blockchain/                   # Hardhat Ethereum Smart Contracts
-│   ├── contracts/
-│   │   ├── EnergyTrading.sol     # Settlement recording, dispute logging & trade verification
-│   │   └── GreenCertificate.sol  # ERC-721 Renewable Energy Certificate (G-REC) NFT
-│   ├── scripts/
-│   │   └── deploy.js             # Automated contract deployment & issuer authorization
-│   ├── test/
-│   │   └── EnergyTrading.test.js # Chai / Hardhat contract test suite
-│   ├── hardhat.config.js         # Hardhat configuration (Solidity 0.8.24, Sepolia, Localhost)
-│   └── package.json              # Hardhat toolbox & OpenZeppelin v5 dependencies
+│   ├── contracts/                # EnergyTrading.sol (Escrow & Settlement) & GreenCertificate.sol (ERC-721 REC)
+│   ├── scripts/deploy.js         # Deployment scripts for Sepolia & Localhost
+│   └── test/                     # Smart contract unit tests
 │
-├── database/                     # Relational Database Scripts
-│   ├── schema.sql                # Complete PostgreSQL DDL (users, orders, cycles, RECs, audit)
-│   └── seed.sql                  # Realistic simulated seed dataset
+├── database/                     # PostgreSQL Database
+│   ├── schema.sql                # 12 Normalized PostgreSQL tables with numeric types and indexes
+│   ├── seed.sql                  # Realistic simulated demonstration datasets
+│   └── migrations/               # Database migration scripts
 │
-├── docs/                         # Technical Architecture Documentation
-│   ├── architecture.md           # System design & 9 detailed Mermaid diagrams
-│   ├── database-design.md        # Relational schema dictionary & indexing plan
-│   └── api-design.md             # REST API specifications and endpoints
-│
-├── .gitignore                    # Git exclusions
-├── .env.example                  # Environment variable template
-├── package.json                  # Root monorepo script runner
-└── README.md                     # Platform overview and getting started guide
+└── docs/                         # Technical Architecture Documentation
+    ├── architecture.md           # System design & Mermaid diagrams
+    ├── database-design.md        # Normalized schema, ER diagram & precision rules
+    ├── api-design.md             # Complete REST API specification
+    └── design-system.md          # UI/UX design tokens and component specification
 ```
 
 ---
 
-## 3. The 3 Platform Roles
+## 3. Database Architecture (12 Normalized Tables)
 
-| Role | Key Capabilities | Primary Portal |
-| :--- | :--- | :--- |
-| **PRODUCER** | • Lists surplus renewable energy (kWh & ask price)<br>• Monitors simulated solar, wind, and hydro generation<br>• Tracks completed sales and automated ETH revenue payouts | `/producer` |
-| **CONSUMER** | • Explores renewable energy order book in merit-order<br>• Submits energy requests with maximum willingness to pay<br>• Receives fair proportional allocation during high demand<br>• Claims and retires on-chain ERC-721 RECs | `/consumer` |
-| **ADMINISTRATOR**| • Governs dynamic pricing rules and Time-of-Use multipliers<br>• Triggers double-auction clearing and matching cycles<br>• Audits on-chain settlement hashes and contract state<br>• Manages registered participant credentials | `/admin` |
-
----
-
-## 4. Algorithmic Specifications
-
-### 4.1. Demand-Aware Weighted Proportional Allocation
-When aggregate consumer demand exceeds available renewable supply ($D_{total} > S_{total}$), the platform ensures equitable distribution rather than giving 100% to a single party:
-$$\text{Effective Weight}_i = W_i \times D_i$$
-$$\text{Allocation Share}_i = S_{total} \times \frac{W_i \cdot D_i}{\sum_j W_j \cdot D_j}$$
-Surplus residual supply is iteratively redistributed to unsatisfied requests up to their requested cap.
-
-### 4.2. Price-Aware Greedy Merit-Order Matching
-The matching engine implements an off-chain double auction:
-1. Producer listings are ordered ascending by ask price (cheapest clean energy first).
-2. Consumer bids are ordered descending by max price (highest willingness to pay first).
-3. Trades are executed whenever $\text{Bid Price} \ge \text{Ask Price}$.
-4. A midpoint uniform clearing price is computed for the trade pair:
-$$P_{clearing} = \frac{P_{ask} + P_{bid}}{2}$$
-
-### 4.3. Rule-Based Dynamic Energy Pricing
-Computes suggested prices based on explicit Time-of-Use (TOU) schedules and microgrid supply-demand elasticity:
-$$P_{dynamic} = P_{base} \times M_{TOU} \times \left(1 + \alpha \cdot \frac{D - S}{D + S}\right) \times M_{source}$$
-- Peak evening hours (18:00 - 22:00): $M_{TOU} = 1.30$
-- Off-peak nocturnal hours (01:00 - 05:00): $M_{TOU} = 0.80$
-- Safety guardrails enforce minimum floor ($0.00004\text{ ETH}$) and maximum ceiling ($0.00025\text{ ETH}$).
-
-### 4.4. Carbon Savings Estimation
-Measures avoided greenhouse gas emissions relative to regional thermal grid baseline ($0.820\text{ kg CO}_2/\text{kWh}$):
-$$\text{Avoided CO}_2 = \text{Energy}_{kWh} \times (0.820 - \text{Emission}_{source})$$
-- Solar PV Factor: $0.041\text{ kg CO}_2/\text{kWh}$
-- Wind Turbine Factor: $0.011\text{ kg CO}_2/\text{kWh}$
-- Hydro Factor: $0.024\text{ kg CO}_2/\text{kWh}$
+1. **`users`**: User identities, roles (`PRODUCER`, `CONSUMER`, `ADMIN`), smart meter IDs, and Ethereum wallet addresses.
+2. **`energy_listings`**: Active producer energy offers with numerical capacities and selling prices.
+3. **`energy_requests`**: Consumer demand bids with priority weighting (Critical, Commercial, Standard).
+4. **`allocation_results`**: Historical market clearing cycles, execution runtimes, and Jain's Fairness Index.
+5. **`allocation_details`**: Itemized consumer fulfillment ratios per clearing cycle.
+6. **`pricing_history`**: Audit trail of dynamic pricing formulas, supply-demand elasticity swings, and clamps.
+7. **`energy_transactions`**: ACID-settled P2P energy trades with row-level locks preventing overselling.
+8. **`carbon_records`**: Avoided greenhouse gas emissions calculated against 0.82 kg CO2/kWh grid baseline.
+9. **`green_certificates`**: ERC-721 Green Renewable Energy Certificates (GL-REC).
+10. **`blockchain_transactions`**: Cryptographic trade settlement receipts on Ethereum Sepolia.
+11. **`platform_settings`**: Configurable system parameters (base tariff, platform fee, carbon intensity).
+12. **`activity_logs`**: System audit trail and compliance activity logging.
 
 ---
 
-## 5. Getting Started & Local Execution
+## 4. API Endpoints Reference
 
-### 5.1. Prerequisites
-- **Node.js**: v20+ or v24+
-- **npm**: v10+
-- **Git**
-- *(Optional)* **PostgreSQL 15+** (The backend features an automatic in-memory mock fallback mode if PostgreSQL is not yet running locally).
+All endpoints are hosted at `/api/v1` (with `/api` compatibility aliases):
 
-### 5.2. Initial Setup
-1. Clone the repository and copy the environment configuration:
-   ```bash
-   cp .env.example .env
-   ```
+- **Auth**: `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`, `POST /auth/nonce`
+- **Producers**: `POST /producers/listings`, `GET /producers/listings`, `GET /producers/listings/:id`, `PUT /producers/listings/:id`, `DELETE /producers/listings/:id`, `GET /producers/dashboard`
+- **Consumers**: `POST /consumers/requests`, `GET /consumers/requests`, `GET /consumers/allocations`, `GET /consumers/dashboard`
+- **Marketplace**: `GET /marketplace/listings` (search, filters, pagination, sort), `GET /marketplace/listings/:id`
+- **Allocation**: `POST /allocation/execute`, `GET /allocation/results`, `GET /allocation/results/:id`, `GET /allocation/compare`
+- **Dynamic Pricing**: `GET /pricing/current`, `POST /pricing/calculate`, `GET /pricing/history`
+- **Transactions**: `POST /transactions` (ACID with row locks), `GET /transactions`, `GET /transactions/:id`, `GET /transactions/history`
+- **Carbon & REC**: `GET /carbon/summary`, `GET /carbon/records`, `GET /certificates`, `GET /certificates/:id`, `GET /certificates/verify/:id`, `POST /certificates/issue`
+- **Admin**: `GET /admin/dashboard`, `GET /admin/users`, `GET /admin/transactions`, `GET /admin/listings`, `PUT /admin/settings`
 
-2. Run algorithm unit tests to verify mathematical logic:
-   ```bash
-   node --test backend/src/tests/algorithms.test.js
-   ```
+---
 
-### 5.3. Running the Backend API
+## 5. Automated Test Suite
+
+Run all automated unit and integration tests:
+
+```bash
+npm --prefix backend test
+```
+
+**Results: 35 passing tests in <700ms**, covering:
+- PostgreSQL dual-mode connectivity and health
+- User registration, login, bcrypt hashing, and JWT verification
+- Role authorization guards (`PRODUCER`, `CONSUMER`, `ADMIN`)
+- Producer listing creation, updates, and deletion guards
+- Consumer demand requests and allocation queries
+- Marketplace search, energy source filters, price ranges, and pagination
+- Zod schema rejection of negative energy quantities and zero prices
+- Transaction settlement calculations, total amount, and carbon offsets
+- Concurrency control and overselling prevention
+- Administrative privilege restrictions
+
+---
+
+## 6. How to Run Locally
+
+### Start Backend API Server:
 ```bash
 cd backend
 npm install
-npm run dev
-```
-The API starts at `http://localhost:5000/api/v1`. Test the health check endpoint:
-```bash
-curl http://localhost:5000/api/v1/health
+npm start
+# API available at http://localhost:5000/api/v1
 ```
 
-### 5.4. Running the Frontend
+### Start Next.js Frontend:
 ```bash
 cd frontend
 npm install
 npm run dev
+# Web application available at http://localhost:3000
 ```
-The application will be accessible at `http://localhost:3000`:
-- **Landing Page**: `http://localhost:3000/`
-- **Login Portal**: `http://localhost:3000/login`
-- **Registration Portal**: `http://localhost:3000/register`
-- **Forgot Password**: `http://localhost:3000/forgot-password`
-- **Producer Dashboard**: `http://localhost:3000/producer/dashboard`
-- **Consumer Dashboard**: `http://localhost:3000/consumer/dashboard`
-- **Administrator Dashboard**: `http://localhost:3000/admin/dashboard`
-
-### 5.5. Running Unit & Integration Tests
-Run both algorithm and authentication test suites:
-```bash
-node --test backend/src/tests/algorithms.test.js backend/src/tests/auth.test.js
-```
-Or build the Next.js production bundle:
-```bash
-npm --prefix frontend run build
-```
-
-### 5.5. Running Blockchain Smart Contracts (Hardhat)
-```bash
-cd blockchain
-npm install
-npm run compile
-npm test
-```
-
-To deploy locally to a Hardhat node:
-```bash
-# Terminal 1: Start local node
-npx hardhat node
-
-# Terminal 2: Deploy contracts
-npm run deploy:local
-```
-
-To deploy to Ethereum Sepolia Testnet:
-Ensure `SEPOLIA_RPC_URL` and `DEPLOYER_PRIVATE_KEY` are populated in `.env`, then:
-```bash
-npm run deploy:sepolia
-```
-
----
-
-## 6. Database Setup (Optional for Full PostgreSQL Integration)
-Create the database and apply the schema and seed scripts:
-```bash
-createdb greenledger_db
-psql -d greenledger_db -f database/schema.sql
-psql -d greenledger_db -f database/seed.sql
-```
-
----
-
-## 7. Phase Completion & Progress Summary
-
-- [x] **Phase 1: Project Initialization & System Architecture**
-  - Monorepo structure, 9 Mermaid architecture diagrams, PostgreSQL schema, Hardhat smart contracts (`EnergyTrading.sol`, `GreenCertificate.sol`), and algorithmic engines.
-- [x] **Phase 2: Professional UI/UX Design System**
-  - Brand identity, vector logo, color system, typography, 22 reusable components, public/auth/dashboard layouts, component showroom, and light/dark theme foundation.
-- [x] **Phase 3: Landing Page, Authentication & User Registration**
-  - High-converting commercial landing page with simulated telemetry indicators, research allocation benchmark comparison, 4-step workflow, and carbon impact metrics.
-  - Dedicated authentication pages: `/login`, `/register`, `/forgot-password`.
-  - Role-based separation for **Producer** and **Consumer** registration (public admin registration forbidden).
-  - Backend authentication with bcryptjs password hashing, JWT token issuance, protected endpoints, and duplicate email prevention.
-  - Non-custodial MetaMask Web3 wallet integration with Sepolia network detection and signature nonce flow.
-  - Dedicated role dashboard routes: `/producer/dashboard`, `/consumer/dashboard`, `/admin/dashboard`.
-  - 18 passing backend test suites and successful Next.js 15 production build.

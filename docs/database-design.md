@@ -1,154 +1,173 @@
-# GreenLedger Database Design Document
+# GreenLedger Database Architecture & Design (Phase 4 Edition)
 
-## 1. Overview
+## 1. Relational Database Overview
 
-The GreenLedger relational persistence layer is designed for **PostgreSQL 15+** to manage off-chain market orders, user identities, telemetry logs, and on-chain settlement receipts. The database separates transactional market activity from blockchain settlement anchors, ensuring atomic transactions and sub-second query performance.
+GreenLedger utilizes a normalized PostgreSQL database designed for high transactional consistency, precise numerical accounting, auditability, and on-chain cryptographic settlement linkage.
 
----
-
-## 2. Entity Relational Design
-
-The schema is divided into four logical domains:
-1. **Identity & Roles**: `users`, `producer_profiles`, `consumer_profiles`
-2. **Order Book & Market**: `energy_listings`, `energy_requests`, `system_pricing_parameters`
-3. **Clearing & Settlement**: `allocation_cycles`, `settlement_transactions`
-4. **Green Certificates & Telemetry**: `renewable_energy_certificates`, `simulated_generation_logs`, `audit_logs`
+- **Engine**: PostgreSQL 16+ (with active in-memory dual-mode fallback repository for development and sandbox testing)
+- **Precision Standard**: All monetary values and energy volumes use `NUMERIC` types rather than floating-point to prevent IEEE 754 precision drift.
+- **Concurrency & Integrity**: Energy purchase settlements use explicit database transactions with row-level locks (`SELECT ... FOR UPDATE`) to eliminate race conditions and overselling.
 
 ---
 
-## 3. Data Dictionary
+## 2. Entity-Relationship Model (12 Core Tables)
+
+```mermaid
+erDiagram
+    USERS ||--o{ PRODUCER_PROFILES : "has"
+    USERS ||--o{ CONSUMER_PROFILES : "has"
+    USERS ||--o{ ENERGY_LISTINGS : "lists"
+    USERS ||--o{ ENERGY_REQUESTS : "requests"
+    USERS ||--o{ ENERGY_TRANSACTIONS : "participates"
+    USERS ||--o{ GREEN_CERTIFICATES : "owns"
+    USERS ||--o{ ACTIVITY_LOGS : "generates"
+
+    ENERGY_LISTINGS ||--o{ ENERGY_TRANSACTIONS : "fulfills"
+    ALLOCATION_RESULTS ||--|{ ALLOCATION_DETAILS : "contains"
+    USERS ||--o{ ALLOCATION_DETAILS : "allocated_to"
+
+    ENERGY_TRANSACTIONS ||--o| CARBON_RECORDS : "quantifies"
+    ENERGY_TRANSACTIONS ||--o| GREEN_CERTIFICATES : "proves"
+    ENERGY_TRANSACTIONS ||--o| BLOCKCHAIN_TRANSACTIONS : "anchors"
+```
+
+---
+
+## 3. Detailed Table Specifications
 
 ### 3.1. `users`
-Stores all platform participants and maps them to their Ethereum wallet addresses and simulated smart meters.
+Core user authentication and smart meter registry.
+- `id`: `SERIAL PRIMARY KEY`
+- `full_name`: `VARCHAR(120) NOT NULL`
+- `email`: `VARCHAR(255) UNIQUE NOT NULL`
+- `password_hash`: `VARCHAR(255) NOT NULL` (bcrypt 10-round salt)
+- `role`: `VARCHAR(20) NOT NULL CHECK (role IN ('PRODUCER', 'CONSUMER', 'ADMIN'))`
+- `wallet_address`: `VARCHAR(42) UNIQUE` (Ethereum Sepolia address)
+- `meter_id`: `VARCHAR(100) UNIQUE NOT NULL` (Simulated smart meter ID)
+- `account_status`: `VARCHAR(20) DEFAULT 'ACTIVE' CHECK (account_status IN ('ACTIVE', 'SUSPENDED', 'PENDING'))`
+- `nonce`: `VARCHAR(100)` (Web3 cryptographic challenge)
+- `phone`: `VARCHAR(30)`
+- `reputation_score`: `NUMERIC(5, 2) DEFAULT 100.00`
+- `created_at`: `TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`
+- `updated_at`: `TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`
 
-| Column | Data Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | `SERIAL` | `PRIMARY KEY` | Unique internal user identifier |
-| `wallet_address` | `VARCHAR(42)` | `UNIQUE`, `NOT NULL` | Ethereum address (0x...) |
-| `email` | `VARCHAR(255)` | `UNIQUE` | Optional contact email |
-| `name` | `VARCHAR(120)` | `NOT NULL` | Display name / entity label |
-| `role` | `VARCHAR(20)` | `NOT NULL`, `CHECK (role IN ('PRODUCER', 'CONSUMER', 'ADMIN'))` | System role |
-| `meter_id` | `VARCHAR(100)` | `UNIQUE`, `NOT NULL` | Simulated smart meter identifier |
-| `is_active` | `BOOLEAN` | `DEFAULT TRUE` | Platform participation status |
-| `reputation_score` | `NUMERIC(5,2)` | `DEFAULT 100.00` | Dynamic reliability rating |
-| `created_at` | `TIMESTAMPTZ` | `DEFAULT CURRENT_TIMESTAMP` | Account creation timestamp |
-| `updated_at` | `TIMESTAMPTZ` | `DEFAULT CURRENT_TIMESTAMP` | Last modification timestamp |
+### 3.2. `energy_listings`
+Renewable energy capacity offered by producers.
+- `id`: `SERIAL PRIMARY KEY`
+- `producer_id`: `INT NOT NULL REFERENCES users(id) ON DELETE RESTRICT`
+- `energy_source`: `VARCHAR(30) NOT NULL CHECK (energy_source IN ('SOLAR', 'WIND', 'HYDRO', 'BIOMASS', 'HYBRID'))`
+- `total_energy_kwh`: `NUMERIC(12, 2) NOT NULL CHECK (total_energy_kwh > 0)`
+- `available_energy_kwh`: `NUMERIC(12, 2) NOT NULL CHECK (available_energy_kwh >= 0 AND available_energy_kwh <= total_energy_kwh)`
+- `price_per_kwh`: `NUMERIC(16, 8) NOT NULL CHECK (price_per_kwh > 0)`
+- `listing_status`: `VARCHAR(20) DEFAULT 'ACTIVE' CHECK (listing_status IN ('ACTIVE', 'PARTIALLY_FILLED', 'FILLED', 'CANCELLED', 'EXPIRED'))`
+- `min_purchase_kwh`: `NUMERIC(10, 2) DEFAULT 1.00`
+- `listing_window_start`: `TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`
+- `listing_window_end`: `TIMESTAMP WITH TIME ZONE DEFAULT (CURRENT_TIMESTAMP + INTERVAL '24 hours')`
+- `created_at`: `TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`
+- `updated_at`: `TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`
 
-### 3.2. `producer_profiles`
-Extended operational metadata for energy producers (microgrids).
+### 3.3. `energy_requests`
+Demand bids submitted by consumers.
+- `id`: `SERIAL PRIMARY KEY`
+- `consumer_id`: `INT NOT NULL REFERENCES users(id) ON DELETE RESTRICT`
+- `requested_energy_kwh`: `NUMERIC(12, 2) NOT NULL CHECK (requested_energy_kwh > 0)`
+- `priority_weight`: `NUMERIC(5, 2) DEFAULT 1.00 CHECK (priority_weight >= 1.0)`
+- `request_status`: `VARCHAR(20) DEFAULT 'PENDING' CHECK (request_status IN ('PENDING', 'MATCHED', 'PARTIALLY_MATCHED', 'FULFILLED', 'CANCELLED', 'REJECTED', 'EXPIRED'))`
+- `max_acceptable_price`: `NUMERIC(16, 8)`
+- `urgency_level`: `VARCHAR(20) DEFAULT 'NORMAL' CHECK (urgency_level IN ('HIGH', 'NORMAL', 'FLEXIBLE'))`
+- `created_at`: `TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`
 
-| Column | Data Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | `SERIAL` | `PRIMARY KEY` | Profile record ID |
-| `user_id` | `INT` | `REFERENCES users(id) ON DELETE CASCADE` | Associated user ID |
-| `energy_source` | `VARCHAR(30)` | `NOT NULL`, `CHECK ('SOLAR', 'WIND', 'HYDRO', 'BIOMASS', 'HYBRID')` | Generation technology |
-| `capacity_kw` | `NUMERIC(10,2)` | `NOT NULL` | Peak nameplate capacity in kW |
-| `base_price_per_kwh` | `NUMERIC(16,8)` | `NOT NULL` | Floor ask price in ETH |
-| `location_grid` | `VARCHAR(100)` | `NOT NULL` | Substation / microgrid sector identifier |
-| `total_energy_produced_kwh` | `NUMERIC(14,2)` | `DEFAULT 0.00` | Lifetime generated kWh |
-| `total_earnings_eth` | `NUMERIC(18,8)` | `DEFAULT 0.00000000` | Lifetime ETH earned |
+### 3.4. `allocation_results`
+High-level summary of algorithmic market clearing cycles.
+- `id`: `SERIAL PRIMARY KEY`
+- `total_available_energy`: `NUMERIC(14, 2) NOT NULL`
+- `total_requested_energy`: `NUMERIC(14, 2) NOT NULL`
+- `total_allocated_energy`: `NUMERIC(14, 2) NOT NULL`
+- `algorithm_name`: `VARCHAR(50) NOT NULL`
+- `jain_fairness_index`: `NUMERIC(6, 4)`
+- `execution_time_ms`: `NUMERIC(10, 2)`
+- `created_at`: `TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`
 
-### 3.3. `consumer_profiles`
-Extended operational metadata for energy consumers.
+### 3.5. `allocation_details`
+Itemized consumer fulfillment per clearing cycle.
+- `id`: `SERIAL PRIMARY KEY`
+- `allocation_result_id`: `INT NOT NULL REFERENCES allocation_results(id) ON DELETE CASCADE`
+- `consumer_id`: `INT NOT NULL REFERENCES users(id) ON DELETE RESTRICT`
+- `requested_energy_kwh`: `NUMERIC(12, 2) NOT NULL`
+- `allocated_energy_kwh`: `NUMERIC(12, 2) NOT NULL`
+- `unfulfilled_energy_kwh`: `NUMERIC(12, 2) NOT NULL`
+- `fulfillment_ratio`: `NUMERIC(5, 4) NOT NULL`
 
-| Column | Data Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | `SERIAL` | `PRIMARY KEY` | Profile record ID |
-| `user_id` | `INT` | `REFERENCES users(id) ON DELETE CASCADE` | Associated user ID |
-| `priority_tier` | `VARCHAR(20)` | `CHECK ('CRITICAL', 'COMMERCIAL', 'STANDARD', 'LOW_PRIORITY')` | Priority tier for weighted allocation |
-| `max_budget_per_kwh` | `NUMERIC(16,8)` | `NOT NULL` | Maximum bid price in ETH |
-| `total_energy_consumed_kwh` | `NUMERIC(14,2)` | `DEFAULT 0.00` | Lifetime consumed clean kWh |
-| `total_carbon_saved_kg` | `NUMERIC(14,2)` | `DEFAULT 0.00` | Lifetime CO2 emissions avoided |
+### 3.6. `pricing_history`
+Audit records of dynamic rule-based pricing computations.
+- `id`: `SERIAL PRIMARY KEY`
+- `base_price`: `NUMERIC(16, 8) NOT NULL`
+- `supply_quantity`: `NUMERIC(14, 2) NOT NULL`
+- `demand_quantity`: `NUMERIC(14, 2) NOT NULL`
+- `supply_demand_ratio`: `NUMERIC(8, 4) NOT NULL`
+- `calculated_price`: `NUMERIC(16, 8) NOT NULL`
+- `minimum_price`: `NUMERIC(16, 8) NOT NULL`
+- `maximum_price`: `NUMERIC(16, 8) NOT NULL`
+- `created_at`: `TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`
 
-### 3.4. `energy_listings`
-Active and historical renewable energy supply orders.
+### 3.7. `energy_transactions`
+ACID-settled P2P energy trades.
+- `id`: `SERIAL PRIMARY KEY`
+- `producer_id`: `INT NOT NULL REFERENCES users(id) ON DELETE RESTRICT`
+- `consumer_id`: `INT NOT NULL REFERENCES users(id) ON DELETE RESTRICT`
+- `listing_id`: `INT REFERENCES energy_listings(id) ON DELETE SET NULL`
+- `energy_quantity_kwh`: `NUMERIC(12, 2) NOT NULL CHECK (energy_quantity_kwh > 0)`
+- `price_per_kwh`: `NUMERIC(16, 8) NOT NULL CHECK (price_per_kwh > 0)`
+- `total_amount`: `NUMERIC(18, 8) NOT NULL CHECK (total_amount > 0)`
+- `transaction_status`: `VARCHAR(20) DEFAULT 'PENDING' CHECK (transaction_status IN ('PENDING', 'CONFIRMED', 'SETTLED', 'FAILED', 'DISPUTED'))`
+- `blockchain_transaction_hash`: `VARCHAR(66)`
+- `created_at`: `TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`
 
-| Column | Data Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | `SERIAL` | `PRIMARY KEY` | Listing ID |
-| `producer_id` | `INT` | `REFERENCES users(id) ON DELETE RESTRICT` | Producer user ID |
-| `energy_source` | `VARCHAR(30)` | `NOT NULL` | Clean generation source |
-| `quantity_kwh` | `NUMERIC(12,2)` | `NOT NULL` | Initial energy listed in kWh |
-| `available_kwh` | `NUMERIC(12,2)` | `NOT NULL` | Remaining unallocated kWh |
-| `unit_price_eth` | `NUMERIC(16,8)` | `NOT NULL` | Ask price per kWh in ETH |
-| `min_purchase_kwh` | `NUMERIC(10,2)` | `DEFAULT 1.00` | Minimum order increment |
-| `status` | `VARCHAR(20)` | `CHECK ('ACTIVE', 'PARTIALLY_FILLED', 'FILLED', 'CANCELLED', 'EXPIRED')` | Lifecycle status |
-| `listing_window_start` | `TIMESTAMPTZ` | `NOT NULL` | Start of delivery interval |
-| `listing_window_end` | `TIMESTAMPTZ` | `NOT NULL` | End of delivery interval |
+### 3.8. `carbon_records`
+Automated avoided emission offsets.
+- `id`: `SERIAL PRIMARY KEY`
+- `transaction_id`: `INT REFERENCES energy_transactions(id) ON DELETE SET NULL`
+- `renewable_energy_kwh`: `NUMERIC(12, 2) NOT NULL`
+- `grid_emission_factor`: `NUMERIC(6, 4) NOT NULL DEFAULT 0.8200` (0.8200 kg CO2 / kWh regional baseline)
+- `estimated_carbon_savings`: `NUMERIC(12, 2) NOT NULL`
+- `created_at`: `TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`
 
-### 3.5. `energy_requests`
-Consumer energy demands submitted to the double-auction matching engine.
+### 3.9. `green_certificates`
+ERC-721 tokenized Renewable Energy Certificates (GL-REC).
+- `id`: `SERIAL PRIMARY KEY`
+- `transaction_id`: `INT REFERENCES energy_transactions(id) ON DELETE SET NULL`
+- `certificate_number`: `VARCHAR(100) UNIQUE NOT NULL`
+- `owner_id`: `INT NOT NULL REFERENCES users(id) ON DELETE RESTRICT`
+- `energy_quantity_kwh`: `NUMERIC(12, 2) NOT NULL`
+- `carbon_savings`: `NUMERIC(12, 2) NOT NULL`
+- `blockchain_certificate_id`: `BIGINT UNIQUE`
+- `blockchain_transaction_hash`: `VARCHAR(66)`
+- `certificate_status`: `VARCHAR(20) DEFAULT 'ISSUED' CHECK (certificate_status IN ('PENDING', 'ISSUED', 'RETIRED', 'TRANSFERRED'))`
+- `created_at`: `TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`
 
-| Column | Data Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | `SERIAL` | `PRIMARY KEY` | Request ID |
-| `consumer_id` | `INT` | `REFERENCES users(id) ON DELETE RESTRICT` | Consumer user ID |
-| `requested_kwh` | `NUMERIC(12,2)` | `NOT NULL` | Total energy needed in kWh |
-| `allocated_kwh` | `NUMERIC(12,2)` | `DEFAULT 0.00` | Energy fulfilled so far |
-| `max_acceptable_price_eth` | `NUMERIC(16,8)` | `NOT NULL` | Maximum ceiling bid |
-| `priority_weight` | `NUMERIC(5,2)` | `DEFAULT 1.00` | Proportional allocation multiplier |
-| `urgency_level` | `VARCHAR(20)` | `CHECK ('HIGH', 'NORMAL', 'FLEXIBLE')` | Dispatch preference |
-| `status` | `VARCHAR(20)` | `CHECK ('PENDING', 'MATCHED', 'PARTIALLY_MATCHED', 'FULFILLED', 'REJECTED', 'EXPIRED')` | Request status |
+### 3.10. `blockchain_transactions`
+On-chain settlement receipts on Ethereum Sepolia.
+- `id`: `SERIAL PRIMARY KEY`
+- `application_transaction_id`: `INT REFERENCES energy_transactions(id) ON DELETE SET NULL`
+- `transaction_hash`: `VARCHAR(66) UNIQUE NOT NULL`
+- `contract_address`: `VARCHAR(42) NOT NULL`
+- `network_name`: `VARCHAR(50) DEFAULT 'Sepolia'`
+- `transaction_type`: `VARCHAR(50) NOT NULL CHECK (transaction_type IN ('SETTLEMENT', 'REC_MINT', 'REC_TRANSFER', 'REC_RETIRE'))`
+- `transaction_status`: `VARCHAR(20) DEFAULT 'CONFIRMED' CHECK (transaction_status IN ('PENDING', 'CONFIRMED', 'FAILED'))`
+- `block_number`: `BIGINT`
+- `created_at`: `TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`
 
-### 3.6. `allocation_cycles`
-Audit records of discrete batch clearing runs executed by the matching and allocation engines.
+### 3.11. `platform_settings`
+Global configurable governance parameters.
+- `id`: `SERIAL PRIMARY KEY`
+- `setting_key`: `VARCHAR(100) UNIQUE NOT NULL`
+- `setting_value`: `TEXT NOT NULL`
+- `updated_at`: `TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`
 
-| Column | Data Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | `SERIAL` | `PRIMARY KEY` | Cycle ID |
-| `cycle_number` | `INT` | `UNIQUE`, `NOT NULL` | Monotonically increasing cycle number |
-| `algorithm_used` | `VARCHAR(50)` | `NOT NULL` | Algorithm identifier |
-| `total_demand_kwh` | `NUMERIC(14,2)` | `NOT NULL` | Aggregate demand in cycle |
-| `total_supply_kwh` | `NUMERIC(14,2)` | `NOT NULL` | Aggregate supply in cycle |
-| `clearing_price_eth` | `NUMERIC(16,8)` | `NULLABLE` | Uniform clearing price if applicable |
-| `matched_orders_count` | `INT` | `DEFAULT 0` | Total trades matched |
-| `execution_status` | `VARCHAR(20)` | `DEFAULT 'COMPLETED'` | Engine execution result |
-
-### 3.7. `settlement_transactions`
-The central transaction record connecting off-chain matched trades with on-chain Ethereum Sepolia receipts.
-
-| Column | Data Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | `SERIAL` | `PRIMARY KEY` | Transaction ID |
-| `trade_hash` | `VARCHAR(66)` | `UNIQUE`, `NOT NULL` | Keccak256 / SHA-256 trade commitment |
-| `allocation_cycle_id` | `INT` | `REFERENCES allocation_cycles(id)` | Batch cycle reference |
-| `listing_id` | `INT` | `REFERENCES energy_listings(id)` | Matched supply order |
-| `request_id` | `INT` | `REFERENCES energy_requests(id)` | Matched demand order |
-| `producer_id` | `INT` | `REFERENCES users(id)` | Energy seller |
-| `consumer_id` | `INT` | `REFERENCES users(id)` | Energy buyer |
-| `energy_amount_kwh` | `NUMERIC(12,2)` | `NOT NULL` | Settled volume in kWh |
-| `unit_price_eth` | `NUMERIC(16,8)` | `NOT NULL` | Settled unit price |
-| `total_amount_eth` | `NUMERIC(16,8)` | `NOT NULL` | Total cost in ETH |
-| `carbon_saved_kg` | `NUMERIC(10,2)` | `NOT NULL` | Avoided CO2 emissions |
-| `settlement_status` | `VARCHAR(20)` | `CHECK ('PENDING', 'ON_CHAIN_SETTLED', 'FAILED', 'DISPUTED')` | Settlement state |
-| `tx_hash` | `VARCHAR(66)` | `NULLABLE` | Sepolia transaction hash (0x...) |
-| `block_number` | `BIGINT` | `NULLABLE` | Sepolia block number |
-| `settled_at` | `TIMESTAMPTZ` | `NULLABLE` | Block timestamp |
-
-### 3.8. `renewable_energy_certificates`
-Off-chain registry of minted on-chain ERC-721 Renewable Energy Certificates.
-
-| Column | Data Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | `SERIAL` | `PRIMARY KEY` | Record ID |
-| `token_id` | `BIGINT` | `UNIQUE`, `NULLABLE` | ERC-721 token ID on Sepolia |
-| `transaction_id` | `INT` | `REFERENCES settlement_transactions(id)` | Source trade settlement |
-| `owner_address` | `VARCHAR(42)` | `NOT NULL` | Consumer wallet holding the REC |
-| `producer_address` | `VARCHAR(42)` | `NOT NULL` | Producer wallet that generated energy |
-| `energy_amount_kwh` | `NUMERIC(12,2)` | `NOT NULL` | Clean energy certified |
-| `carbon_offset_kg` | `NUMERIC(10,2)` | `NOT NULL` | Carbon offset certified |
-| `energy_source` | `VARCHAR(30)` | `NOT NULL` | SOLAR, WIND, HYDRO |
-| `is_retired` | `BOOLEAN` | `DEFAULT FALSE` | True if claimed and retired |
-
----
-
-## 4. Indexing Strategy
-
-To maintain high throughput during order book scans and matching runs, the following indexes are defined:
-1. `idx_users_wallet`: B-Tree index on `users(wallet_address)` for O(1) Web3 authentication lookup.
-2. `idx_users_role`: B-Tree index on `users(role)` for fast role-based filtering.
-3. `idx_listings_status`: B-Tree index on `energy_listings(status)` to rapidly extract active supply.
-4. `idx_listings_price`: B-Tree index on `energy_listings(unit_price_eth)` for merit-order sorting.
-5. `idx_requests_status`: B-Tree index on `energy_requests(status)` for pending demand filtering.
-6. `idx_transactions_trade_hash`: Unique B-Tree index on `settlement_transactions(trade_hash)` for instant on-chain verification.
-7. `idx_rec_owner`: B-Tree index on `renewable_energy_certificates(owner_address)` for consumer portfolio queries.
+### 3.12. `activity_logs`
+System security and audit trail.
+- `id`: `SERIAL PRIMARY KEY`
+- `user_id`: `INT REFERENCES users(id) ON DELETE SET NULL`
+- `action`: `VARCHAR(100) NOT NULL`
+- `description`: `TEXT`
+- `created_at`: `TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`

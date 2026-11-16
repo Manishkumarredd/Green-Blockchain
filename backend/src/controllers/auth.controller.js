@@ -1,426 +1,209 @@
-const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
-const crypto = require("crypto");
+const jwt = require("jsonwebtoken");
 const config = require("../config/env");
 const db = require("../config/db");
+const userService = require("../services/userService");
+const { sendSuccess } = require("../utils/responseHandler");
+const { sendError } = require("../utils/errorHandler");
 
-// Password policy validator: min 8 chars, 1 uppercase, 1 lowercase, 1 number
-function validatePassword(password) {
-  if (!password || typeof password !== "string") return false;
-  if (password.length < 8) return false;
-  const hasUpper = /[A-Z]/.test(password);
-  const hasLower = /[a-z]/.test(password);
-  const hasDigit = /[0-9]/.test(password);
-  return hasUpper && hasLower && hasDigit;
+function getRoleRedirectPath(role) {
+  switch (role) {
+    case "PRODUCER":
+      return "/producer/dashboard";
+    case "CONSUMER":
+      return "/consumer/dashboard";
+    case "ADMIN":
+      return "/admin/dashboard";
+    default:
+      return "/";
+  }
 }
 
-// Email format validator
-function validateEmail(email) {
-  if (!email || typeof email !== "string") return false;
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email.trim());
-}
+class AuthController {
+  async register(req, res, next) {
+    try {
+      const { name, fullName, email, password, role, meterId, walletAddress, phone } = req.body;
+      const displayName = fullName || name;
 
-/**
- * Register a new Producer or Consumer
- */
-async function register(req, res, next) {
-  try {
-    const { name, email, password, role, phone, walletAddress } = req.body;
-
-    // 1. Validation
-    if (!name || name.trim().length < 2) {
-      return res.status(400).json({
-        success: false,
-        error: "Full name is required (minimum 2 characters).",
-      });
-    }
-
-    if (!validateEmail(email)) {
-      return res.status(400).json({
-        success: false,
-        error: "A valid email address is required.",
-      });
-    }
-
-    if (!validatePassword(password)) {
-      return res.status(400).json({
-        success: false,
-        error: "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number.",
-      });
-    }
-
-    const normalizedRole = (role || "").toUpperCase().trim();
-    if (normalizedRole === "ADMIN") {
-      return res.status(403).json({
-        success: false,
-        error: "Public administrator registration is prohibited. Administrator accounts must be securely provisioned.",
-      });
-    }
-
-    if (!["PRODUCER", "CONSUMER"].includes(normalizedRole)) {
-      return res.status(400).json({
-        success: false,
-        error: "Role must be specified as either 'PRODUCER' or 'CONSUMER'.",
-      });
-    }
-
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanWallet = walletAddress ? walletAddress.trim().toLowerCase() : null;
-
-    // 2. Duplicate Check
-    if (db.isConnected) {
-      const emailCheck = await db.query("SELECT id FROM users WHERE LOWER(email) = $1", [cleanEmail]);
-      if (emailCheck.rows.length > 0) {
-        return res.status(409).json({
-          success: false,
-          error: "An account with this email address already exists. Please sign in instead.",
-        });
+      // Validate required fields
+      if (!displayName || !email || !password || !role) {
+        return sendError(res, "Missing required fields: name, email, password, and role are mandatory.", 400);
       }
 
-      if (cleanWallet) {
-        const walletCheck = await db.query("SELECT id FROM users WHERE LOWER(wallet_address) = $1", [cleanWallet]);
-        if (walletCheck.rows.length > 0) {
-          return res.status(409).json({
-            success: false,
-            error: "This Ethereum wallet address is already linked to another account.",
-          });
-        }
-      }
-    } else {
-      const existingUser = db.inMemoryStore.users.find((u) => u.email.toLowerCase() === cleanEmail);
-      if (existingUser) {
-        return res.status(409).json({
-          success: false,
-          error: "An account with this email address already exists. Please sign in instead.",
-        });
+      // Security: Disallow public administrator registration
+      if (role === "ADMIN") {
+        return sendError(res, "Direct public administrator registration is prohibited. Admin accounts require system provisioning.", 403);
       }
 
-      if (cleanWallet) {
-        const existingWallet = db.inMemoryStore.users.find(
-          (u) => u.wallet_address && u.wallet_address.toLowerCase() === cleanWallet
-        );
-        if (existingWallet) {
-          return res.status(409).json({
-            success: false,
-            error: "This Ethereum wallet address is already linked to another account.",
-          });
-        }
+      // Role check
+      if (role !== "PRODUCER" && role !== "CONSUMER") {
+        return sendError(res, "Role must be either PRODUCER or CONSUMER.", 400);
       }
+
+      // Password strength validation
+      if (password.length < 8) {
+        return sendError(res, "Password must be at least 8 characters long.", 400);
+      }
+      if (!/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
+        return sendError(res, "Password must contain at least one uppercase letter and one number.", 400);
+      }
+
+      // Auto-generate meter ID if not supplied
+      const finalMeterId = meterId || `METER-${role.substring(0, 4)}-${Date.now().toString().slice(-6)}`;
+
+      const { user, token } = await userService.register({
+        email,
+        password,
+        fullName: displayName,
+        name: displayName,
+        role,
+        meterId: finalMeterId,
+        walletAddress,
+        phone,
+      });
+
+      const redirectPath = getRoleRedirectPath(user.role);
+
+      return res.status(201).json({
+        success: true,
+        message: "Account registered successfully",
+        user,
+        data: { user, token },
+        token,
+        redirectPath,
+      });
+    } catch (err) {
+      if (err.statusCode) {
+        return sendError(res, err.message, err.statusCode);
+      }
+      next(err);
     }
+  }
 
-    // 3. Hash Password with bcrypt
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(password, salt);
+  async login(req, res, next) {
+    try {
+      const { email, password } = req.body;
+      if (!email || !password) {
+        return sendError(res, "Email and password are required.", 400);
+      }
 
-    // 4. Generate unique meter identifier
-    const meterId = `METER-${normalizedRole.slice(0, 4)}-${Date.now().toString().slice(-6)}`;
+      const normalizedEmail = email.toLowerCase().trim();
 
-    // 5. Insert Record
-    let newUser;
-    if (db.isConnected) {
-      const insertResult = await db.query(
-        `INSERT INTO users (name, email, password_hash, role, phone, wallet_address, meter_id, is_active)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, true)
-         RETURNING id, name, email, role, phone, wallet_address, meter_id, is_active, reputation_score, created_at`,
-        [name.trim(), cleanEmail, passwordHash, normalizedRole, phone || null, cleanWallet, meterId]
-      );
-      newUser = insertResult.rows[0];
-
-      // Insert corresponding initial profile
-      if (normalizedRole === "PRODUCER") {
-        await db.query(
-          `INSERT INTO producer_profiles (user_id, energy_source, capacity_kw, base_price_per_kwh, location_grid)
-           VALUES ($1, 'SOLAR', 100.00, 0.00008500, 'Microgrid-Alpha-Sector-1')`,
-          [newUser.id]
-        );
+      let user = null;
+      if (db.isConnected) {
+        const result = await db.query("SELECT * FROM users WHERE LOWER(email) = $1", [normalizedEmail]);
+        user = result.rows[0];
       } else {
-        await db.query(
-          `INSERT INTO consumer_profiles (user_id, priority_tier, max_budget_per_kwh)
-           VALUES ($1, 'STANDARD', 0.00010000)`,
-          [newUser.id]
-        );
+        user = db.inMemoryStore.users.find((u) => u.email.toLowerCase() === normalizedEmail);
       }
-    } else {
-      newUser = {
-        id: db.inMemoryStore.users.length + 1,
-        name: name.trim(),
-        email: cleanEmail,
-        password_hash: passwordHash,
-        role: normalizedRole,
-        phone: phone || null,
-        wallet_address: cleanWallet || `0x${crypto.randomBytes(20).toString("hex")}`,
-        meter_id: meterId,
-        is_active: true,
-        reputation_score: 100.0,
-        created_at: new Date().toISOString(),
-      };
-      db.inMemoryStore.users.push(newUser);
-    }
 
-    // 6. Sign JWT
-    const token = jwt.sign(
-      {
-        userId: newUser.id,
-        email: newUser.email,
-        name: newUser.name,
-        role: newUser.role,
-        meterId: newUser.meter_id,
-        walletAddress: newUser.wallet_address,
-      },
-      config.JWT.SECRET,
-      { expiresIn: config.JWT.EXPIRES_IN }
-    );
-
-    const redirectPath =
-      newUser.role === "PRODUCER"
-        ? "/producer/dashboard"
-        : newUser.role === "CONSUMER"
-        ? "/consumer/dashboard"
-        : "/admin/dashboard";
-
-    return res.status(201).json({
-      success: true,
-      message: "Registration successful.",
-      token,
-      redirectPath,
-      user: {
-        id: newUser.id,
-        name: newUser.name,
-        email: newUser.email,
-        role: newUser.role,
-        phone: newUser.phone,
-        walletAddress: newUser.wallet_address,
-        meterId: newUser.meter_id,
-        reputationScore: newUser.reputation_score,
-      },
-    });
-  } catch (err) {
-    next(err);
-  }
-}
-
-/**
- * Login with email and password
- */
-async function login(req, res, next) {
-  try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        error: "Email and password are required.",
-      });
-    }
-
-    const cleanEmail = email.trim().toLowerCase();
-
-    // 1. Fetch User Record
-    let user;
-    if (db.isConnected) {
-      const result = await db.query("SELECT * FROM users WHERE LOWER(email) = $1", [cleanEmail]);
-      if (result.rows.length === 0) {
-        return res.status(401).json({
-          success: false,
-          error: "Invalid email or password.",
-        });
-      }
-      user = result.rows[0];
-    } else {
-      user = db.inMemoryStore.users.find((u) => u.email.toLowerCase() === cleanEmail);
       if (!user) {
-        return res.status(401).json({
-          success: false,
-          error: "Invalid email or password.",
-        });
+        return sendError(res, "Invalid email or password.", 401);
       }
-    }
 
-    // 2. Check Active Status
-    if (!user.is_active) {
-      return res.status(403).json({
-        success: false,
-        error: "Account has been suspended or deactivated. Contact platform administrator.",
-      });
-    }
+      const isMatch = await bcrypt.compare(password, user.password_hash);
+      if (!isMatch) {
+        return sendError(res, "Invalid email or password.", 401);
+      }
 
-    // 3. Compare Password Hash
-    let isMatch = false;
-    if (user.password_hash) {
-      isMatch = await bcrypt.compare(password, user.password_hash);
-    } else {
-      // Fallback for default test password if hash is missing
-      isMatch = password === "Password123!";
-    }
+      if (user.account_status === "SUSPENDED") {
+        return sendError(res, "This account is suspended.", 403);
+      }
 
-    if (!isMatch) {
-      return res.status(401).json({
-        success: false,
-        error: "Invalid email or password.",
-      });
-    }
+      const token = jwt.sign(
+        { id: user.id, userId: user.id, email: user.email, role: user.role },
+        config.JWT.SECRET,
+        { expiresIn: config.JWT.EXPIRES_IN }
+      );
 
-    // 4. Generate JWT
-    const token = jwt.sign(
-      {
-        userId: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        meterId: user.meter_id,
-        walletAddress: user.wallet_address,
-      },
-      config.JWT.SECRET,
-      { expiresIn: config.JWT.EXPIRES_IN }
-    );
-
-    const redirectPath =
-      user.role === "PRODUCER"
-        ? "/producer/dashboard"
-        : user.role === "CONSUMER"
-        ? "/consumer/dashboard"
-        : "/admin/dashboard";
-
-    return res.status(200).json({
-      success: true,
-      message: "Login successful.",
-      token,
-      redirectPath,
-      user: {
+      const safeUser = {
         id: user.id,
-        name: user.name,
+        name: user.full_name || user.name,
+        fullName: user.full_name || user.name,
         email: user.email,
         role: user.role,
-        meterId: user.meter_id,
         walletAddress: user.wallet_address,
+        wallet_address: user.wallet_address,
+        meterId: user.meter_id,
+        meter_id: user.meter_id,
+        accountStatus: user.account_status,
         reputationScore: user.reputation_score,
-      },
-    });
-  } catch (err) {
-    next(err);
+      };
+
+      const redirectPath = getRoleRedirectPath(user.role);
+
+      return res.status(200).json({
+        success: true,
+        message: "Authentication successful",
+        user: safeUser,
+        data: { user: safeUser, token },
+        token,
+        redirectPath,
+      });
+    } catch (err) {
+      if (err.statusCode) {
+        return sendError(res, err.message, err.statusCode);
+      }
+      next(err);
+    }
+  }
+
+  async logout(req, res, next) {
+    return sendSuccess(res, null, "Logged out successfully");
+  }
+
+  async me(req, res, next) {
+    return this.getProfile(req, res, next);
+  }
+
+  async getProfile(req, res, next) {
+    try {
+      const targetId = req.user.id || req.user.userId;
+      const user = await userService.getUserById(targetId);
+      return res.status(200).json({
+        success: true,
+        user,
+        data: user,
+      });
+    } catch (err) {
+      if (err.statusCode) {
+        return sendError(res, err.message, err.statusCode);
+      }
+      next(err);
+    }
+  }
+
+  async requestNonce(req, res, next) {
+    try {
+      const { walletAddress } = req.body;
+      if (!walletAddress || !/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
+        return sendError(res, "A valid Ethereum wallet address is required.", 400);
+      }
+
+      const rawNonce = Math.floor(Math.random() * 1000000).toString();
+      const nonce = `Sign this message to authenticate with GreenLedger. Nonce: ${rawNonce}`;
+
+      return res.status(200).json({
+        success: true,
+        nonce,
+        walletAddress: walletAddress.toLowerCase(),
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async forgotPassword(req, res, next) {
+    try {
+      const { email } = req.body;
+      return res.status(200).json({
+        success: true,
+        message: `If an account exists for ${email || "this address"}, password reset instructions have been sent.`,
+      });
+    } catch (err) {
+      next(err);
+    }
   }
 }
 
-/**
- * Retrieve authenticated user profile
- */
-async function getProfile(req, res, next) {
-  try {
-    const { userId } = req.user;
-
-    let user;
-    if (db.isConnected) {
-      const result = await db.query(
-        "SELECT id, name, email, role, phone, wallet_address, meter_id, is_active, reputation_score, created_at FROM users WHERE id = $1",
-        [userId]
-      );
-      user = result.rows[0];
-    } else {
-      user = db.inMemoryStore.users.find((u) => u.id === userId);
-    }
-
-    if (!user) {
-      return res.status(404).json({ success: false, error: "User profile not found." });
-    }
-
-    const sanitized = {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      phone: user.phone,
-      walletAddress: user.wallet_address,
-      meterId: user.meter_id,
-      reputationScore: user.reputation_score,
-      createdAt: user.created_at,
-    };
-
-    return res.status(200).json({ success: true, user: sanitized });
-  } catch (err) {
-    next(err);
-  }
-}
-
-/**
- * Logout
- */
-async function logout(req, res) {
-  return res.status(200).json({
-    success: true,
-    message: "Logged out successfully.",
-  });
-}
-
-/**
- * Request cryptographically random nonce for Web3 signature authentication
- */
-async function requestNonce(req, res, next) {
-  try {
-    const { walletAddress } = req.body;
-    if (!walletAddress) {
-      return res.status(400).json({ success: false, error: "walletAddress is required." });
-    }
-
-    const cleanWallet = walletAddress.trim().toLowerCase();
-    const nonce = `Sign this message to authenticate with GreenLedger:\nNonce: ${crypto.randomBytes(16).toString("hex")}\nTimestamp: ${Date.now()}`;
-
-    // Store nonce on user or in-memory
-    if (db.isConnected) {
-      await db.query("UPDATE users SET nonce = $1 WHERE LOWER(wallet_address) = $2", [nonce, cleanWallet]);
-    } else {
-      const u = db.inMemoryStore.users.find(
-        (x) => x.wallet_address && x.wallet_address.toLowerCase() === cleanWallet
-      );
-      if (u) u.nonce = nonce;
-    }
-
-    return res.status(200).json({
-      success: true,
-      walletAddress: cleanWallet,
-      nonce,
-    });
-  } catch (err) {
-    next(err);
-  }
-}
-
-/**
- * Forgot password simulation
- */
-async function forgotPassword(req, res, next) {
-  try {
-    const { email } = req.body;
-    if (!email || !validateEmail(email)) {
-      return res.status(400).json({ success: false, error: "A valid email address is required." });
-    }
-
-    const cleanEmail = email.trim().toLowerCase();
-
-    // Check user existence
-    let userExists = false;
-    if (db.isConnected) {
-      const result = await db.query("SELECT id FROM users WHERE LOWER(email) = $1", [cleanEmail]);
-      userExists = result.rows.length > 0;
-    } else {
-      userExists = db.inMemoryStore.users.some((u) => u.email.toLowerCase() === cleanEmail);
-    }
-
-    // Always return neutral response to prevent email enumeration
-    return res.status(200).json({
-      success: true,
-      message: "If an account exists with this email, password reset instructions have been sent.",
-    });
-  } catch (err) {
-    next(err);
-  }
-}
-
-module.exports = {
-  register,
-  login,
-  getProfile,
-  logout,
-  requestNonce,
-  forgotPassword,
-};
+module.exports = new AuthController();
