@@ -158,6 +158,8 @@ export const consumersApi = {
 // 4. Marketplace APIs
 // -----------------------------------------------------------------------------
 export const marketplaceApi = {
+  getSummary: () => request<any>("/marketplace/summary", { method: "GET" }),
+
   getListings: (params: {
     page?: number;
     limit?: number;

@@ -6,9 +6,10 @@ export interface StatisticCardProps {
   value: string | number;
   unit?: string;
   change?: string | number;
-  trend?: "up" | "down" | "neutral";
+  trend?: "up" | "down" | "neutral" | { value: number | string; isPositive?: boolean };
   timeframe?: string;
-  icon?: React.ReactNode;
+  description?: string;
+  icon?: React.ReactNode | React.ElementType;
   iconBgColor?: string;
   className?: string;
 }
@@ -18,23 +19,40 @@ export const StatisticCard: React.FC<StatisticCardProps> = ({
   value,
   unit,
   change,
-  trend = "neutral",
-  timeframe = "vs. last cycle",
+  trend,
+  timeframe,
+  description,
   icon,
   iconBgColor = "bg-brand-50 text-brand-600 dark:bg-brand-950/60 dark:text-brand-400 border border-brand-200/50 dark:border-brand-800/40",
   className = "",
 }) => {
+  const isObjTrend = typeof trend === "object" && trend !== null;
+  const trendDirection: "up" | "down" | "neutral" = isObjTrend
+    ? (trend.isPositive ? "up" : "down")
+    : (trend || "neutral");
+  const displayChange = isObjTrend ? trend.value : change;
+
   const trendColor = {
     up: "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 border-emerald-200/60 dark:border-emerald-800/30",
     down: "text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 border-rose-200/60 dark:border-rose-800/30",
     neutral: "text-navy-500 dark:text-navy-400 bg-navy-100 dark:bg-navy-800 border-navy-200/60 dark:border-navy-700/40",
-  }[trend];
+  }[trendDirection];
 
   const TrendIcon = {
     up: TrendingUp,
     down: TrendingDown,
     neutral: Minus,
-  }[trend];
+  }[trendDirection];
+
+  const renderIcon = () => {
+    if (!icon) return null;
+    if (React.isValidElement(icon)) return icon;
+    if (typeof icon === "function" || typeof icon === "object") {
+      const IconComponent = icon as React.ElementType;
+      return <IconComponent className="w-5 h-5" />;
+    }
+    return icon as React.ReactNode;
+  };
 
   return (
     <div
@@ -46,7 +64,7 @@ export const StatisticCard: React.FC<StatisticCardProps> = ({
         </span>
         {icon && (
           <div className={`p-2.5 rounded-xl flex-shrink-0 flex items-center justify-center ${iconBgColor}`}>
-            {icon}
+            {renderIcon()}
           </div>
         )}
       </div>
@@ -63,19 +81,19 @@ export const StatisticCard: React.FC<StatisticCardProps> = ({
           )}
         </div>
 
-        {(change !== undefined || timeframe) && (
+        {(displayChange !== undefined || timeframe || description) && (
           <div className="mt-2.5 flex items-center gap-2 flex-wrap">
-            {change !== undefined && (
+            {displayChange !== undefined && (
               <span
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${trendColor}`}
               >
                 <TrendIcon className="w-3 h-3" />
-                {typeof change === "number" && change > 0 ? `+${change}%` : `${change}%`}
+                {typeof displayChange === "number" && displayChange > 0 ? `+${displayChange}%` : `${displayChange}%`}
               </span>
             )}
-            {timeframe && (
+            {(timeframe || description) && (
               <span className="text-xs text-navy-400 dark:text-navy-500 font-medium">
-                {timeframe}
+                {description || timeframe}
               </span>
             )}
           </div>

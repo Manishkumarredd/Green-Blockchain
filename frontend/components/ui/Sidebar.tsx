@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Activity,
@@ -33,6 +34,7 @@ export const Sidebar: React.FC<{ activeNavId?: string; onNavSelect?: (id: string
   activeNavId = "overview",
   onNavSelect,
 }) => {
+  const router = useRouter();
   const { role, setRole, sidebarOpen, setSidebarOpen } = useApp();
 
   const producerNav: NavItem[] = [
@@ -98,8 +100,11 @@ export const Sidebar: React.FC<{ activeNavId?: string; onNavSelect?: (id: string
               {(["PRODUCER", "CONSUMER", "ADMIN"] as UserRole[]).map((r) => (
                 <button
                   key={r}
-                  onClick={() => setRole(r)}
-                  className={`py-1 text-[11px] font-bold rounded-lg transition ${
+                  onClick={() => {
+                    setRole(r);
+                    router.push(`/${r.toLowerCase()}/dashboard`);
+                  }}
+                  className={`py-1 text-[11px] font-bold rounded-lg transition cursor-pointer ${
                     role === r
                       ? "bg-white dark:bg-navy-900 text-brand-600 dark:text-brand-400 shadow-sm"
                       : "text-navy-500 hover:text-navy-900 dark:hover:text-white"

@@ -3,7 +3,7 @@
 import React, { useEffect } from "react";
 import { useApp } from "../../../components/common/AppContext";
 import { DashboardLayout } from "../../../components/layout/DashboardLayout";
-import { DashboardView } from "../../../components/views/DashboardView";
+import { ProducerDashboardView } from "../../../components/views/ProducerDashboardView";
 
 export default function ProducerDashboardPage() {
   const { setRole } = useApp();
@@ -14,7 +14,7 @@ export default function ProducerDashboardPage() {
 
   return (
     <DashboardLayout activeNavId="overview">
-      <DashboardView />
+      <ProducerDashboardView />
     </DashboardLayout>
   );
 }

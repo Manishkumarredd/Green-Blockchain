@@ -9,6 +9,7 @@ export interface ModalProps {
   children: React.ReactNode;
   footer?: React.ReactNode;
   size?: "sm" | "md" | "lg" | "xl";
+  showCloseButton?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -19,6 +20,7 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   footer,
   size = "md",
+  showCloseButton = true,
 }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -55,27 +57,31 @@ export const Modal: React.FC<ModalProps> = ({
       <div
         className={`relative w-full ${sizeStyles} bg-white dark:bg-navy-900 rounded-3xl border border-navy-200 dark:border-navy-800 shadow-2xl overflow-hidden z-10 transition-all transform scale-100 animate-in fade-in zoom-in-95 duration-200`}
       >
-        {/* Header */}
-        <div className="flex items-start justify-between p-5 sm:p-6 border-b border-navy-100 dark:border-navy-800">
-          <div>
-            {title && (
-              <h3 className="text-lg font-bold text-navy-900 dark:text-white tracking-tight">
-                {title}
-              </h3>
-            )}
-            {description && (
-              <p className="mt-1 text-xs sm:text-sm text-navy-500 dark:text-navy-400">
-                {description}
-              </p>
+        {/* Header (rendered if title/description or showCloseButton) */}
+        {(title || description || showCloseButton) && (
+          <div className="flex items-start justify-between p-5 sm:p-6 border-b border-navy-100 dark:border-navy-800">
+            <div>
+              {title && (
+                <h3 className="text-lg font-bold text-navy-900 dark:text-white tracking-tight">
+                  {title}
+                </h3>
+              )}
+              {description && (
+                <p className="mt-1 text-xs sm:text-sm text-navy-500 dark:text-navy-400">
+                  {description}
+                </p>
+              )}
+            </div>
+            {showCloseButton && (
+              <button
+                onClick={onClose}
+                className="p-1.5 rounded-xl text-navy-400 hover:text-navy-600 dark:hover:text-navy-200 hover:bg-navy-100 dark:hover:bg-navy-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-xl text-navy-400 hover:text-navy-600 dark:hover:text-navy-200 hover:bg-navy-100 dark:hover:bg-navy-800 transition cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+        )}
 
         {/* Content Body */}
         <div className="p-5 sm:p-6 max-h-[75vh] overflow-y-auto">{children}</div>

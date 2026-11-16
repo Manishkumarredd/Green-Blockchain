@@ -51,9 +51,9 @@ export const ToastItem: React.FC<{ toast: ToastMessage; onDismiss: () => void }>
         <h4 className="text-sm font-bold text-navy-900 dark:text-white leading-tight">
           {toast.title}
         </h4>
-        {toast.description && (
+        {(toast.description || toast.message) && (
           <p className="mt-0.5 text-xs text-navy-500 dark:text-navy-400 leading-relaxed">
-            {toast.description}
+            {toast.description || toast.message}
           </p>
         )}
       </div>

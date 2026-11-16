@@ -2,6 +2,50 @@ const db = require("../config/db");
 const { AppError } = require("../utils/errorHandler");
 
 class MarketplaceService {
+  async getMarketplaceSummary() {
+    if (db.isConnected) {
+      const res = await db.query(`
+        SELECT 
+          COUNT(*) as active_listings,
+          COALESCE(SUM(available_energy_kwh), 0) as total_available_kwh,
+          COUNT(DISTINCT energy_source) as distinct_sources,
+          COALESCE(MIN(price_per_kwh), 0) as min_price,
+          COALESCE(AVG(price_per_kwh), 0) as avg_price,
+          COALESCE(MAX(price_per_kwh), 0) as max_price
+        FROM energy_listings
+        WHERE listing_status = 'ACTIVE' AND available_energy_kwh > 0
+      `);
+      const row = res.rows[0];
+      return {
+        activeListingsCount: parseInt(row.active_listings, 10),
+        totalAvailableKwh: Number(row.total_available_kwh),
+        distinctSourcesCount: parseInt(row.distinct_sources, 10),
+        minPriceEth: Number(row.min_price).toFixed(8),
+        avgPriceEth: Number(row.avg_price).toFixed(8),
+        maxPriceEth: Number(row.max_price).toFixed(8),
+      };
+    } else {
+      const active = db.inMemoryStore.energy_listings.filter(
+        (l) => (l.listing_status || l.status) === "ACTIVE" && Number(l.available_energy_kwh || l.available_kwh || 0) > 0
+      );
+      const totalAvailable = active.reduce((sum, l) => sum + Number(l.available_energy_kwh || l.available_kwh || 0), 0);
+      const sources = new Set(active.map((l) => l.energy_source));
+      const prices = active.map((l) => Number(l.price_per_kwh || l.unit_price_eth));
+      const minPrice = prices.length ? Math.min(...prices) : 0;
+      const maxPrice = prices.length ? Math.max(...prices) : 0;
+      const avgPrice = prices.length ? prices.reduce((s, p) => s + p, 0) / prices.length : 0;
+
+      return {
+        activeListingsCount: active.length,
+        totalAvailableKwh: totalAvailable,
+        distinctSourcesCount: sources.size,
+        minPriceEth: minPrice.toFixed(8),
+        avgPriceEth: avgPrice.toFixed(8),
+        maxPriceEth: maxPrice.toFixed(8),
+      };
+    }
+  }
+
   async getMarketplaceListings({
     page = 1,
     limit = 10,
@@ -19,19 +63,19 @@ class MarketplaceService {
       const params = [];
       let idx = 1;
 
-      if (energySource) {
+      if (energySource && energySource !== "ALL") {
         conditions.push(`l.energy_source = $${idx++}`);
         params.push(energySource.toUpperCase());
       }
-      if (minPrice !== undefined) {
+      if (minPrice !== undefined && minPrice !== null && minPrice !== "") {
         conditions.push(`l.price_per_kwh >= $${idx++}`);
         params.push(minPrice);
       }
-      if (maxPrice !== undefined) {
+      if (maxPrice !== undefined && maxPrice !== null && maxPrice !== "") {
         conditions.push(`l.price_per_kwh <= $${idx++}`);
         params.push(maxPrice);
       }
-      if (minEnergy !== undefined) {
+      if (minEnergy !== undefined && minEnergy !== null && minEnergy !== "") {
         conditions.push(`l.available_energy_kwh >= $${idx++}`);
         params.push(minEnergy);
       }
@@ -84,8 +128,8 @@ class MarketplaceService {
       return {
         listings: dataRes.rows,
         meta: {
-          page,
-          limit,
+          page: Number(page),
+          limit: Number(limit),
           total,
           totalPages: Math.ceil(total / limit) || 1,
         },
@@ -115,17 +159,17 @@ class MarketplaceService {
         };
       });
 
-      if (energySource) {
+      if (energySource && energySource !== "ALL") {
         items = items.filter((l) => l.energy_source.toLowerCase() === energySource.toLowerCase());
       }
-      if (minPrice !== undefined) {
-        items = items.filter((l) => Number(l.price_per_kwh) >= minPrice);
+      if (minPrice !== undefined && minPrice !== null && minPrice !== "") {
+        items = items.filter((l) => Number(l.price_per_kwh) >= Number(minPrice));
       }
-      if (maxPrice !== undefined) {
-        items = items.filter((l) => Number(l.price_per_kwh) <= maxPrice);
+      if (maxPrice !== undefined && maxPrice !== null && maxPrice !== "") {
+        items = items.filter((l) => Number(l.price_per_kwh) <= Number(maxPrice));
       }
-      if (minEnergy !== undefined) {
-        items = items.filter((l) => l.available_energy_kwh >= minEnergy);
+      if (minEnergy !== undefined && minEnergy !== null && minEnergy !== "") {
+        items = items.filter((l) => l.available_energy_kwh >= Number(minEnergy));
       }
       if (search) {
         const term = search.toLowerCase();
@@ -147,8 +191,8 @@ class MarketplaceService {
       return {
         listings: paginated,
         meta: {
-          page,
-          limit,
+          page: Number(page),
+          limit: Number(limit),
           total,
           totalPages: Math.ceil(total / limit) || 1,
         },
@@ -165,6 +209,7 @@ class MarketplaceService {
           u.email as producer_email,
           u.reputation_score,
           u.wallet_address as producer_wallet,
+          u.meter_id as producer_meter_id,
           pp.capacity_kw,
           pp.location_grid
         FROM energy_listings l
@@ -183,8 +228,9 @@ class MarketplaceService {
         ...l,
         producer_name: u.full_name || u.name,
         producer_email: u.email,
-        reputation_score: u.reputation_score,
+        reputation_score: u.reputation_score || 99.2,
         producer_wallet: u.wallet_address,
+        producer_meter_id: u.meter_id || "METER-PROD-SOL-101",
         capacity_kw: 250.0,
         location_grid: "Microgrid-Alpha-Sector-1",
       };

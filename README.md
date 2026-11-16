@@ -99,7 +99,34 @@ All endpoints are hosted at `/api/v1` (with `/api` compatibility aliases):
 
 ---
 
-## 5. Automated Test Suite
+## 5. Phase 5: Producer Dashboard and Renewable Energy Marketplace
+
+Phase 5 delivers a complete commercial-grade Producer Portal and public Energy Marketplace:
+
+### Producer Dashboard (`/producer/dashboard`)
+- **Real-Time KPI Cards**: Total Energy Listed (kWh), Available Energy (kWh), Total Energy Sold (kWh), Total Earnings (ETH).
+- **Interactive Recharts Visualizations**:
+  - Generation and sales volume over time (AreaChart with dual gradients).
+  - Energy source distribution breakdown (Donut PieChart).
+  - Available vs. sold ratio metrics and capacity utilization.
+- **Active Listings Table**: Shows source badge, capacity progress bar, price/kWh, status badge, and one-click actions (View details, Quick Edit modal, Cancellation dialog).
+- **Recent Transactions Table**: Shows settled peer-to-peer trades with consumer details, quantity, price, total amount, timestamp, and transaction status.
+
+### Listing Management & Creation (`/producer/listings`, `/producer/listings/new`, `/producer/listings/[id]`)
+- **New Energy Listing Form**: Allows selecting energy source (`SOLAR`, `WIND`, `HYDRO`, `BIOMASS`, `HYBRID`), capacity (kWh), selling price (ETH/kWh), min purchase (kWh), and duration window with live estimated revenue and avoided CO2 calculations.
+- **Full Listing Directory (`/producer/listings`)**: Comprehensive table with live text search, source filtering, status filtering, sorting, pagination, quick edit modal, and cancellation confirmation.
+- **Listing Technical Specification (`/producer/listings/[id]`)**: Deep-dive details including smart meter verification, capacity fulfillment progress, and tied settlement transactions.
+
+### Energy Marketplace (`/marketplace`, `/marketplace/[id]`)
+- **Live Orderbook**: Commercial marketplace displaying available clean energy offers across the microgrid.
+- **Summary Metrics**: Active listings count, total available capacity (kWh), active source types, and min/avg price.
+- **Multi-Factor Filters & Search**: Search by producer name, filter by energy source buttons (`ALL`, `SOLAR`, `WIND`, `HYDRO`, `BIOMASS`, `HYBRID`), price and capacity sliders, and sorting (cheapest first, newest first, highest capacity).
+- **Commercial Listing Cards**: Display source badge, price in ETH/kWh, available capacity, min purchase requirement, and estimated costs for standard packages (50 kWh, 100 kWh).
+- **Interactive Purchase Estimator (`/marketplace/[id]`)**: Purchase slider with real-time fee calculation (base energy + 1.5% platform fee) and avoided carbon emissions (kg CO2) preview, plus direct purchase settlement dialog.
+
+---
+
+## 6. Automated Test Suite
 
 Run all automated unit and integration tests:
 
@@ -121,7 +148,7 @@ npm --prefix backend test
 
 ---
 
-## 6. How to Run Locally
+## 7. How to Run Locally
 
 ### Start Backend API Server:
 ```bash

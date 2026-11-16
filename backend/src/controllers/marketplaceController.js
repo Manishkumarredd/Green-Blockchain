@@ -2,6 +2,15 @@ const marketplaceService = require("../services/marketplaceService");
 const { sendSuccess } = require("../utils/responseHandler");
 
 class MarketplaceController {
+  async getSummary(req, res, next) {
+    try {
+      const summary = await marketplaceService.getMarketplaceSummary();
+      return sendSuccess(res, summary, "Marketplace summary metrics retrieved");
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async getListings(req, res, next) {
     try {
       const { listings, meta } = await marketplaceService.getMarketplaceListings(req.query);

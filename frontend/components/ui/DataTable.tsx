@@ -1,4 +1,5 @@
 import React from "react";
+import { Pagination, PaginationProps } from "./Pagination";
 
 export interface Column<T> {
   key: string;
@@ -15,6 +16,7 @@ export interface DataTableProps<T> {
   isLoading?: boolean;
   emptyMessage?: string;
   onRowClick?: (row: T) => void;
+  pagination?: PaginationProps;
   className?: string;
 }
 
@@ -25,6 +27,7 @@ export function DataTable<T extends Record<string, any>>({
   isLoading = false,
   emptyMessage = "No records found.",
   onRowClick,
+  pagination,
   className = "",
 }: DataTableProps<T>) {
   const alignClass = {
@@ -52,14 +55,14 @@ export function DataTable<T extends Record<string, any>>({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-navy-100 dark:divide-navy-800/60">
+
+          <tbody className="divide-y divide-navy-100 dark:divide-navy-800/80">
             {isLoading ? (
-              // Loading Skeleton Rows
-              Array.from({ length: 4 }).map((_, idx) => (
-                <tr key={`skeleton-${idx}`}>
+              Array.from({ length: 4 }).map((_, rIdx) => (
+                <tr key={`loading-row-${rIdx}`} className="animate-pulse">
                   {columns.map((col) => (
-                    <td key={`col-${col.key}`} className="py-4 px-4">
-                      <div className="h-4 bg-navy-200/60 dark:bg-navy-800 rounded animate-pulse w-3/4"></div>
+                    <td key={`loading-col-${col.key}`} className="py-4 px-4">
+                      <div className="h-4 bg-navy-200 dark:bg-navy-800 rounded w-3/4"></div>
                     </td>
                   ))}
                 </tr>
@@ -68,30 +71,32 @@ export function DataTable<T extends Record<string, any>>({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="py-10 px-4 text-center text-sm text-navy-400 dark:text-navy-500"
+                  className="py-10 px-4 text-center text-sm text-navy-400 dark:text-navy-500 font-medium"
                 >
                   {emptyMessage}
                 </td>
               </tr>
             ) : (
-              data.map((row, index) => {
-                const rowKey = keyExtractor ? keyExtractor(row, index) : row.id || index;
+              data.map((row, rowIdx) => {
+                const rowKey = keyExtractor ? keyExtractor(row, rowIdx) : row.id || rowIdx;
                 return (
                   <tr
                     key={rowKey}
                     onClick={() => onRowClick && onRowClick(row)}
                     className={`transition-colors duration-150 ${
-                      onRowClick ? "cursor-pointer hover:bg-navy-50/70 dark:hover:bg-navy-800/40" : "hover:bg-navy-50/40 dark:hover:bg-navy-800/20"
+                      onRowClick
+                        ? "cursor-pointer hover:bg-navy-50/80 dark:hover:bg-navy-800/50"
+                        : "hover:bg-slate-50/50 dark:hover:bg-navy-800/30"
                     }`}
                   >
                     {columns.map((col) => (
                       <td
-                        key={`cell-${col.key}`}
-                        className={`py-3.5 px-4 text-navy-700 dark:text-navy-200 ${
+                        key={`cell-${rowKey}-${col.key}`}
+                        className={`py-3.5 px-4 text-navy-800 dark:text-navy-200 ${
                           alignClass[col.align || "left"]
                         }`}
                       >
-                        {col.render ? col.render(row, index) : row[col.key]}
+                        {col.render ? col.render(row, rowIdx) : row[col.key]}
                       </td>
                     ))}
                   </tr>
@@ -101,6 +106,12 @@ export function DataTable<T extends Record<string, any>>({
           </tbody>
         </table>
       </div>
+
+      {pagination && (
+        <div className="border-t border-navy-100 dark:border-navy-800 px-4 py-2">
+          <Pagination {...pagination} />
+        </div>
+      )}
     </div>
   );
 }

@@ -12,13 +12,13 @@ export const PublicLayout: React.FC<{ children: React.ReactNode }> = ({ children
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navLinks = [
-    { label: "Home", href: "#home" },
-    { label: "Marketplace", href: "#marketplace" },
-    { label: "How It Works", href: "#how-it-works" },
-    { label: "Features", href: "#features" },
-    { label: "Fair Allocation", href: "#fair-allocation" },
-    { label: "Blockchain", href: "#blockchain" },
-    { label: "About", href: "#about" },
+    { label: "Home", href: "/" },
+    { label: "Marketplace", href: "/marketplace" },
+    { label: "How It Works", href: "/#how-it-works" },
+    { label: "Features", href: "/#features" },
+    { label: "Fair Allocation", href: "/#fair-allocation" },
+    { label: "Blockchain", href: "/#blockchain" },
+    { label: "About", href: "/#about" },
   ];
 
   return (

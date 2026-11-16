@@ -8,6 +8,7 @@ export interface EmptyStateProps {
   description: string;
   actionLabel?: string;
   onAction?: () => void;
+  action?: { label: string; onClick: () => void };
   className?: string;
 }
 
@@ -17,8 +18,12 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   description,
   actionLabel,
   onAction,
+  action,
   className = "",
 }) => {
+  const finalLabel = actionLabel || action?.label;
+  const finalAction = onAction || action?.onClick;
+
   return (
     <div
       className={`flex flex-col items-center justify-center text-center p-8 sm:p-12 bg-white dark:bg-navy-900/80 rounded-2xl border border-dashed border-navy-200 dark:border-navy-800 ${className}`}
@@ -35,9 +40,9 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
         {description}
       </p>
 
-      {actionLabel && onAction && (
-        <Button variant="primary" size="md" onClick={onAction}>
-          {actionLabel}
+      {finalLabel && finalAction && (
+        <Button variant="primary" size="md" onClick={finalAction}>
+          {finalLabel}
         </Button>
       )}
     </div>

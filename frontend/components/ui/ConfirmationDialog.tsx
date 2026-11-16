@@ -12,7 +12,9 @@ export interface ConfirmationDialogProps {
   confirmText?: string;
   cancelText?: string;
   type?: "danger" | "warning" | "info" | "success";
+  variant?: "danger" | "warning" | "info" | "success";
   isLoading?: boolean;
+  loading?: boolean;
 }
 
 export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
@@ -23,9 +25,14 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
   message,
   confirmText = "Confirm",
   cancelText = "Cancel",
-  type = "warning",
+  type,
+  variant,
   isLoading = false,
+  loading = false,
 }) => {
+  const dialogType = type || variant || "warning";
+  const activeLoading = isLoading || loading;
+
   const iconConfig = {
     danger: {
       icon: AlertTriangle,
@@ -47,12 +54,12 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
       color: "text-brand-600 dark:text-brand-400 bg-brand-100 dark:bg-brand-950/60 border-brand-200 dark:border-brand-800",
       btnVariant: "primary" as const,
     },
-  }[type];
+  }[dialogType];
 
   const IconComponent = iconConfig.icon;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="sm">
+    <Modal isOpen={isOpen} onClose={onClose} size="sm" showCloseButton={false}>
       <div className="flex flex-col items-center text-center p-2">
         <div className={`p-3.5 rounded-2xl border mb-4 ${iconConfig.color}`}>
           <IconComponent className="w-6 h-6" />
@@ -62,24 +69,26 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
           {title}
         </h3>
 
-        <p className="text-sm text-navy-500 dark:text-navy-400 mb-6 leading-relaxed">
+        <p className="text-xs sm:text-sm text-navy-500 dark:text-navy-400 leading-relaxed mb-6">
           {message}
         </p>
 
         <div className="flex items-center gap-3 w-full">
           <Button
             variant="secondary"
+            size="md"
             fullWidth
             onClick={onClose}
-            disabled={isLoading}
+            disabled={activeLoading}
           >
             {cancelText}
           </Button>
           <Button
             variant={iconConfig.btnVariant}
+            size="md"
             fullWidth
+            isLoading={activeLoading}
             onClick={onConfirm}
-            isLoading={isLoading}
           >
             {confirmText}
           </Button>
