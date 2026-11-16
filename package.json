@@ -1,0 +1,26 @@
+{
+  "name": "greenledger",
+  "version": "1.0.0",
+  "description": "Professional Blockchain-based Peer-to-Peer Renewable Energy Trading Platform",
+  "private": true,
+  "scripts": {
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "compile:contracts": "npm --prefix blockchain run compile",
+    "test:contracts": "npm --prefix blockchain run test",
+    "test:backend": "npm --prefix backend run test"
+  },
+  "keywords": [
+    "renewable-energy",
+    "p2p-trading",
+    "blockchain",
+    "solidity",
+    "ethereum-sepolia",
+    "nextjs",
+    "express",
+    "postgresql",
+    "smart-contracts"
+  ],
+  "author": "GreenLedger Team",
+  "license": "MIT"
+}

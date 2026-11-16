@@ -1,0 +1,30 @@
+{
+  "name": "greenledger-blockchain",
+  "version": "1.0.0",
+  "description": "Smart contracts and deployment scripts for GreenLedger P2P Energy Trading",
+  "main": "hardhat.config.js",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia"
+  },
+  "keywords": [
+    "solidity",
+    "hardhat",
+    "sepolia",
+    "rec",
+    "energy-trading",
+    "erc721"
+  ],
+  "author": "GreenLedger Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "hardhat": "^2.22.18"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.2.0",
+    "dotenv": "^16.4.7"
+  }
+}
