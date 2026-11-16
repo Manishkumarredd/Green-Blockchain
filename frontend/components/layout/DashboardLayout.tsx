@@ -41,6 +41,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       else if (navId === "carbon") router.push("/consumer/dashboard");
     } else if (role === "ADMIN") {
       if (navId === "overview") router.push("/admin/dashboard");
+      else if (navId === "algorithms" || navId === "matching" || navId === "pricing") router.push("/admin/algorithms");
     }
   };
 

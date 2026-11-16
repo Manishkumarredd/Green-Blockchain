@@ -1,59 +1,28 @@
 const db = require("../config/db");
-const { allocateProportionally } = require("../algorithms/allocation");
+const {
+  allocateDemandAwareWeightedProportional,
+  allocateFCFS,
+  allocateBasicProportional,
+} = require("../algorithms/allocationAlgorithm");
+const { matchOrdersGreedy } = require("../algorithms/greedyMatching");
+const { calculateRuleBasedDynamicPrice } = require("../algorithms/dynamicPricing");
+const { computeComprehensiveMetrics, calculateJainsIndex } = require("../algorithms/fairnessMetrics");
+const {
+  RESEARCH_SCENARIOS,
+  runExperimentScenario,
+} = require("../algorithms/algorithmUtils");
 const { AppError } = require("../utils/errorHandler");
 
-/**
- * Calculates Jain's Fairness Index for an array of fulfillment ratios
- * J(x) = (sum(x_i))^2 / (n * sum(x_i^2))
- */
-function calculateJainsIndex(ratios) {
-  if (!ratios || ratios.length === 0) return 1.0;
-  const n = ratios.length;
-  const sum = ratios.reduce((acc, val) => acc + val, 0);
-  const sumSq = ratios.reduce((acc, val) => acc + val * val, 0);
-  if (sumSq === 0) return 0;
-  return Number(((sum * sum) / (n * sumSq)).toFixed(4));
-}
-
-/**
- * First-Come First-Served (FCFS) Allocation Baseline
- */
-function allocateFCFS(requests, availableSupplyKwh) {
-  let remaining = availableSupplyKwh;
-  const allocations = [];
-
-  for (const r of requests) {
-    const allocated = Math.min(r.requestedKwh, remaining);
-    remaining = Math.max(0, remaining - allocated);
-    allocations.push({
-      id: r.id,
-      consumerId: r.consumerId || r.id,
-      requestedKwh: r.requestedKwh,
-      allocatedKwh: Number(allocated.toFixed(4)),
-      fulfillmentRate: Number((allocated / r.requestedKwh).toFixed(4)),
-    });
-  }
-
-  const totalAllocated = allocations.reduce((sum, a) => sum + a.allocatedKwh, 0);
-  return {
-    allocations,
-    totalAllocatedKwh: Number(totalAllocated.toFixed(4)),
-    unallocatedSupplyKwh: Number(remaining.toFixed(4)),
-  };
-}
-
-/**
- * Basic Proportional Allocation Baseline (Uniform Weights = 1.0)
- */
-function allocateBasicProportional(requests, availableSupplyKwh) {
-  const uniformRequests = requests.map((r) => ({ ...r, priorityWeight: 1.0 }));
-  return allocateProportionally(uniformRequests, availableSupplyKwh);
-}
-
 class AllocationService {
-  async executeAllocation({ algorithm = "WEIGHTED_PROPORTIONAL", requestIds, listingIds } = {}) {
-    const startTime = process.hrtime();
-
+  /**
+   * Execute an energy allocation cycle using specified algorithm
+   */
+  async executeAllocation({
+    algorithm = "WEIGHTED_PROPORTIONAL",
+    requestIds,
+    listingIds,
+    isSimulation = false,
+  } = {}) {
     // 1. Fetch active requests
     let requests = [];
     if (db.isConnected) {
@@ -99,85 +68,341 @@ class AllocationService {
       consumerId: r.consumer_id,
       requestedKwh: Number(r.requested_energy_kwh || r.requested_kwh),
       priorityWeight: Number(r.priority_weight || 1.0),
+      timestamp: r.created_at,
     }));
 
     // 3. Execute chosen algorithm
-    let result = null;
+    let execution = null;
     let algorithmName = "";
 
     if (algorithm === "FCFS") {
-      result = allocateFCFS(formattedRequests, totalAvailableSupply);
+      execution = allocateFCFS(formattedRequests, totalAvailableSupply);
       algorithmName = "FIRST_COME_FIRST_SERVED";
-    } else if (algorithm === "PROPORTIONAL") {
-      result = allocateBasicProportional(formattedRequests, totalAvailableSupply);
+    } else if (algorithm === "PROPORTIONAL" || algorithm === "BASIC_PROPORTIONAL") {
+      execution = allocateBasicProportional(formattedRequests, totalAvailableSupply);
       algorithmName = "BASIC_PROPORTIONAL";
     } else {
-      result = allocateProportionally(formattedRequests, totalAvailableSupply);
+      execution = allocateDemandAwareWeightedProportional(formattedRequests, totalAvailableSupply);
       algorithmName = "DEMAND_AWARE_WEIGHTED_PROPORTIONAL";
     }
 
-    const [seconds, nanoseconds] = process.hrtime(startTime);
-    const executionTimeMs = Number((seconds * 1000 + nanoseconds / 1000000).toFixed(2));
+    const { allocations, metrics } = execution;
 
-    const totalRequested = formattedRequests.reduce((sum, r) => sum + r.requestedKwh, 0);
-    const jainIndex = calculateJainsIndex(result.allocations.map((a) => a.fulfillmentRate));
-
-    // 4. Persist in database
+    // 4. If not a simulation, persist results in database
     let allocationRecord = null;
-    if (db.isConnected) {
-      const insertResult = await db.query(
-        `INSERT INTO allocation_results (total_available_energy, total_requested_energy, total_allocated_energy, algorithm_name, jain_fairness_index, execution_time_ms)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING *`,
-        [totalAvailableSupply, totalRequested, result.totalAllocatedKwh, algorithmName, jainIndex, executionTimeMs]
-      );
-      allocationRecord = insertResult.rows[0];
-
-      for (const item of result.allocations) {
-        const reqObj = formattedRequests.find((r) => r.id === item.id) || {};
-        const unfulfilled = Math.max(0, item.requestedKwh - item.allocatedKwh);
-        await db.query(
-          `INSERT INTO allocation_details (allocation_result_id, consumer_id, requested_energy_kwh, allocated_energy_kwh, unfulfilled_energy_kwh, fulfillment_ratio)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [allocationRecord.id, reqObj.consumerId || 1, item.requestedKwh, item.allocatedKwh, unfulfilled, item.fulfillmentRate]
+    if (!isSimulation) {
+      if (db.isConnected) {
+        const insertResult = await db.query(
+          `INSERT INTO allocation_results (
+            total_available_energy, total_requested_energy, total_allocated_energy,
+            algorithm_name, jain_fairness_index, execution_time_ms, created_at
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+          RETURNING *`,
+          [
+            metrics.totalAvailableSupplyKwh,
+            metrics.totalRequestedKwh,
+            metrics.totalAllocatedKwh,
+            algorithmName,
+            metrics.jainsFulfillmentIndex,
+            metrics.executionTimeMs,
+          ]
         );
-      }
-    } else {
-      allocationRecord = {
-        id: db.inMemoryStore.allocation_results.length + 1,
-        total_available_energy: totalAvailableSupply,
-        total_requested_energy: totalRequested,
-        total_allocated_energy: result.totalAllocatedKwh,
-        algorithm_name: algorithmName,
-        jain_fairness_index: jainIndex,
-        execution_time_ms: executionTimeMs,
-        created_at: new Date(),
-      };
-      db.inMemoryStore.allocation_results.push(allocationRecord);
+        allocationRecord = insertResult.rows[0];
 
-      for (const item of result.allocations) {
-        const reqObj = formattedRequests.find((r) => r.id === item.id) || {};
-        const detail = {
-          id: db.inMemoryStore.allocation_details.length + 1,
-          allocation_result_id: allocationRecord.id,
-          consumer_id: reqObj.consumerId || 1,
-          requested_energy_kwh: item.requestedKwh,
-          allocated_energy_kwh: item.allocatedKwh,
-          unfulfilled_energy_kwh: Math.max(0, item.requestedKwh - item.allocatedKwh),
-          fulfillment_ratio: item.fulfillmentRate,
+        for (const item of allocations) {
+          const reqObj = formattedRequests.find((r) => r.id === item.id) || {};
+          await db.query(
+            `INSERT INTO allocation_details (
+              allocation_result_id, consumer_id, requested_energy_kwh,
+              allocated_energy_kwh, unfulfilled_energy_kwh, fulfillment_ratio
+            )
+            VALUES ($1, $2, $3, $4, $5, $6)`,
+            [
+              allocationRecord.id,
+              reqObj.consumerId || 1,
+              item.requestedKwh,
+              item.allocatedKwh,
+              item.unfulfilledKwh,
+              item.fulfillmentRatio,
+            ]
+          );
+
+          // Update request status
+          const newStatus = item.fulfillmentRatio >= 0.999 ? "FULFILLED" : item.allocatedKwh > 0 ? "PARTIALLY_MATCHED" : "PENDING";
+          await db.query("UPDATE energy_requests SET request_status = $1 WHERE id = $2", [newStatus, item.id]);
+        }
+      } else {
+        allocationRecord = {
+          id: db.inMemoryStore.allocation_results.length + 1,
+          total_available_energy: metrics.totalAvailableSupplyKwh,
+          total_requested_energy: metrics.totalRequestedKwh,
+          total_allocated_energy: metrics.totalAllocatedKwh,
+          algorithm_name: algorithmName,
+          jain_fairness_index: metrics.jainsFulfillmentIndex,
+          execution_time_ms: metrics.executionTimeMs,
+          created_at: new Date(),
         };
-        db.inMemoryStore.allocation_details.push(detail);
+        db.inMemoryStore.allocation_results.unshift(allocationRecord);
+
+        for (const item of allocations) {
+          const reqObj = formattedRequests.find((r) => r.id === item.id) || {};
+          const detail = {
+            id: db.inMemoryStore.allocation_details.length + 1,
+            allocation_result_id: allocationRecord.id,
+            consumer_id: reqObj.consumerId || 1,
+            requested_energy_kwh: item.requestedKwh,
+            allocated_energy_kwh: item.allocatedKwh,
+            unfulfilled_energy_kwh: item.unfulfilledKwh,
+            fulfillment_ratio: item.fulfillmentRatio,
+          };
+          db.inMemoryStore.allocation_details.unshift(detail);
+
+          // Update request in memory
+          const inMemReq = db.inMemoryStore.energy_requests.find((r) => r.id === item.id);
+          if (inMemReq) {
+            inMemReq.request_status = item.fulfillmentRatio >= 0.999 ? "FULFILLED" : item.allocatedKwh > 0 ? "PARTIALLY_MATCHED" : "PENDING";
+            inMemReq.status = inMemReq.request_status;
+          }
+        }
       }
     }
 
     return {
-      allocationResult: allocationRecord,
-      allocations: result.allocations,
-      jainFairnessIndex: jainIndex,
-      executionTimeMs,
+      isSimulation,
+      algorithmName,
+      allocationRecord: allocationRecord || {
+        total_available_energy: metrics.totalAvailableSupplyKwh,
+        total_requested_energy: metrics.totalRequestedKwh,
+        total_allocated_energy: metrics.totalAllocatedKwh,
+        algorithm_name: algorithmName,
+        jain_fairness_index: metrics.jainsFulfillmentIndex,
+        execution_time_ms: metrics.executionTimeMs,
+        created_at: new Date(),
+      },
+      allocations,
+      metrics,
     };
   }
 
+  /**
+   * Execute Greedy Double-Auction Matching
+   */
+  async executeGreedyMatching({ pricingRule = "MIDPOINT", listingIds, requestIds } = {}) {
+    let listings = [];
+    let requests = [];
+
+    if (db.isConnected) {
+      let lSql = "SELECT * FROM energy_listings WHERE listing_status = 'ACTIVE'";
+      const lParams = [];
+      if (listingIds && listingIds.length > 0) {
+        lSql += " AND id = ANY($1)";
+        lParams.push(listingIds);
+      }
+      const lRes = await db.query(lSql, lParams);
+      listings = lRes.rows;
+
+      let rSql = "SELECT * FROM energy_requests WHERE request_status = 'PENDING'";
+      const rParams = [];
+      if (requestIds && requestIds.length > 0) {
+        rSql += " AND id = ANY($1)";
+        rParams.push(requestIds);
+      }
+      const rRes = await db.query(rSql, rParams);
+      requests = rRes.rows;
+    } else {
+      listings = db.inMemoryStore.energy_listings.filter(
+        (l) => (l.listing_status || l.status) === "ACTIVE" && (!listingIds || listingIds.includes(l.id))
+      );
+      requests = db.inMemoryStore.energy_requests.filter(
+        (r) => (r.request_status || r.status) === "PENDING" && (!requestIds || requestIds.includes(r.id))
+      );
+    }
+
+    const result = matchOrdersGreedy(listings, requests, { pricingRule });
+    return result;
+  }
+
+  /**
+   * Get dynamic pricing recommendations based on current supply and demand
+   */
+  async getDynamicPricingRecommendation({ hourOfDay, energySource = "SOLAR", persist = false, customConfig } = {}) {
+    let totalSupply = 0;
+    let totalDemand = 0;
+
+    if (db.isConnected) {
+      const sRes = await db.query("SELECT COALESCE(SUM(available_energy_kwh), 0) as total FROM energy_listings WHERE listing_status = 'ACTIVE'");
+      totalSupply = Number(sRes.rows[0].total || 0);
+
+      const dRes = await db.query("SELECT COALESCE(SUM(requested_energy_kwh), 0) as total FROM energy_requests WHERE request_status = 'PENDING'");
+      totalDemand = Number(dRes.rows[0].total || 0);
+    } else {
+      const activeListings = db.inMemoryStore.energy_listings.filter((l) => (l.listing_status || l.status) === "ACTIVE");
+      totalSupply = activeListings.reduce((sum, l) => sum + Number(l.available_energy_kwh || 0), 0);
+
+      const activeRequests = db.inMemoryStore.energy_requests.filter((r) => (r.request_status || r.status) === "PENDING");
+      totalDemand = activeRequests.reduce((sum, r) => sum + Number(r.requested_energy_kwh || r.requested_kwh || 0), 0);
+    }
+
+    const pricing = calculateRuleBasedDynamicPrice({
+      totalAvailableSupplyKwh: totalSupply,
+      totalDemandKwh: totalDemand,
+      hourOfDay,
+      energySource,
+      customConfig,
+    });
+
+    if (persist) {
+      if (db.isConnected) {
+        await db.query(
+          `INSERT INTO pricing_history (
+            base_price, supply_quantity, demand_quantity, supply_demand_ratio,
+            calculated_price, minimum_price, maximum_price
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            pricing.referencePriceEth,
+            pricing.totalAvailableSupplyKwh,
+            pricing.totalDemandKwh,
+            pricing.supplyDemandRatio,
+            pricing.calculatedPriceEth,
+            pricing.minPriceFloorEth,
+            pricing.maxPriceCeilingEth,
+          ]
+        );
+      } else {
+        db.inMemoryStore.pricing_history.unshift({
+          id: db.inMemoryStore.pricing_history.length + 1,
+          base_price: pricing.referencePriceEth.toFixed(8),
+          supply_quantity: pricing.totalAvailableSupplyKwh,
+          demand_quantity: pricing.totalDemandKwh,
+          supply_demand_ratio: pricing.supplyDemandRatio,
+          calculated_price: pricing.calculatedPriceEth.toFixed(8),
+          minimum_price: pricing.minPriceFloorEth.toFixed(8),
+          maximum_price: pricing.maxPriceCeilingEth.toFixed(8),
+          created_at: new Date(),
+        });
+      }
+    }
+
+    return pricing;
+  }
+
+  /**
+   * Run benchmark comparison across FCFS, Basic Proportional, and Proposed DA-WPA
+   */
+  async compareAllocationAlgorithms(options = {}) {
+    let requests = options.requests || [];
+    let totalSupply = options.availableSupplyKwh ?? options.totalSupplyKwh ?? 0;
+
+    if (requests.length === 0 || totalSupply <= 0) {
+      if (db.isConnected) {
+        const rRes = await db.query("SELECT * FROM energy_requests WHERE request_status = 'PENDING' ORDER BY priority_weight DESC, created_at ASC");
+        requests = rRes.rows;
+
+        const sRes = await db.query("SELECT COALESCE(SUM(available_energy_kwh), 0) as total FROM energy_listings WHERE listing_status = 'ACTIVE'");
+        totalSupply = Number(sRes.rows[0].total || 0);
+      } else {
+        requests = db.inMemoryStore.energy_requests.filter((r) => (r.request_status || r.status) === "PENDING");
+        const activeListings = db.inMemoryStore.energy_listings.filter((l) => (l.listing_status || l.status) === "ACTIVE");
+        totalSupply = activeListings.reduce((sum, l) => sum + Number(l.available_energy_kwh || 0), 0);
+      }
+    }
+
+    // If no active requests or supply in live tables, fall back to standardized research scenario
+    if (requests.length === 0 || totalSupply <= 0) {
+      return runExperimentScenario("LOW_SUPPLY_HIGH_DEMAND");
+    }
+
+    const formattedRequests = requests.map((r) => ({
+      id: r.id,
+      consumerId: r.consumer_id ?? r.consumerId,
+      requestedKwh: Number(r.requested_energy_kwh ?? r.requested_kwh ?? r.requestedKwh ?? 0),
+      priorityWeight: Number(r.priority_weight ?? r.priorityWeight ?? 1.0),
+      timestamp: r.created_at ?? r.timestamp ?? new Date(),
+    }));
+
+    const fcfs = allocateFCFS(formattedRequests, totalSupply);
+    const bpa = allocateBasicProportional(formattedRequests, totalSupply);
+    const proposed = allocateDemandAwareWeightedProportional(formattedRequests, totalSupply);
+
+    const comparisonTable = [
+      {
+        metric: "Jain's Fairness Index",
+        fcfs: fcfs.metrics.jainsFulfillmentIndex,
+        basicProportional: bpa.metrics.jainsFulfillmentIndex,
+        proposedAlgorithm: proposed.metrics.jainsFulfillmentIndex,
+        unit: "Index (0-1)",
+      },
+      {
+        metric: "Overall Fulfillment Ratio",
+        fcfs: fcfs.metrics.overallFulfillmentRatio,
+        basicProportional: bpa.metrics.overallFulfillmentRatio,
+        proposedAlgorithm: proposed.metrics.overallFulfillmentRatio,
+        unit: "Ratio (0-1)",
+      },
+      {
+        metric: "Minimum Fulfillment Ratio",
+        fcfs: fcfs.metrics.minFulfillmentRatio,
+        basicProportional: bpa.metrics.minFulfillmentRatio,
+        proposedAlgorithm: proposed.metrics.minFulfillmentRatio,
+        unit: "Ratio (0-1)",
+      },
+      {
+        metric: "Allocation Efficiency",
+        fcfs: fcfs.metrics.allocationEfficiencyPct,
+        basicProportional: bpa.metrics.allocationEfficiencyPct,
+        proposedAlgorithm: proposed.metrics.allocationEfficiencyPct,
+        unit: "%",
+      },
+      {
+        metric: "Unmet Demand",
+        fcfs: fcfs.metrics.unmetDemandKwh,
+        basicProportional: bpa.metrics.unmetDemandKwh,
+        proposedAlgorithm: proposed.metrics.unmetDemandKwh,
+        unit: "kWh",
+      },
+      {
+        metric: "Computational Runtime",
+        fcfs: fcfs.metrics.executionTimeMs,
+        basicProportional: bpa.metrics.executionTimeMs,
+        proposedAlgorithm: proposed.metrics.executionTimeMs,
+        unit: "ms",
+      },
+    ];
+
+    return {
+      comparisonTable,
+      algorithms: {
+        fcfs: { name: "First-Come, First-Served", metrics: fcfs.metrics, allocations: fcfs.allocations, totalAllocatedKwh: fcfs.metrics.totalAllocatedKwh },
+        FCFS: { name: "First-Come, First-Served", metrics: fcfs.metrics, allocations: fcfs.allocations, totalAllocatedKwh: fcfs.metrics.totalAllocatedKwh },
+        basicProportional: { name: "Basic Proportional Allocation", metrics: bpa.metrics, allocations: bpa.allocations, totalAllocatedKwh: bpa.metrics.totalAllocatedKwh },
+        BPA: { name: "Basic Proportional Allocation", metrics: bpa.metrics, allocations: bpa.allocations, totalAllocatedKwh: bpa.metrics.totalAllocatedKwh },
+        proposedAlgorithm: { name: "Demand-Aware Weighted Proportional (DA-WPA)", metrics: proposed.metrics, allocations: proposed.allocations, totalAllocatedKwh: proposed.metrics.totalAllocatedKwh },
+        DA_WPA: { name: "Demand-Aware Weighted Proportional (DA-WPA)", metrics: proposed.metrics, allocations: proposed.allocations, totalAllocatedKwh: proposed.metrics.totalAllocatedKwh },
+      },
+      totalSupplyKwh: totalSupply,
+      totalRequestedKwh: formattedRequests.reduce((sum, r) => sum + r.requestedKwh, 0),
+    };
+  }
+
+  /**
+   * List available research experiment scenarios
+   */
+  getExperimentScenarios() {
+    return Object.values(RESEARCH_SCENARIOS);
+  }
+
+  /**
+   * Run a reproducible synthetic research scenario
+   */
+  runExperiment(scenarioKey, customOverrides) {
+    return runExperimentScenario(scenarioKey, customOverrides);
+  }
+
+  /**
+   * Get historical allocation results list
+   */
   async getAllocationResults() {
     if (db.isConnected) {
       const res = await db.query("SELECT * FROM allocation_results ORDER BY created_at DESC LIMIT 50");
@@ -187,6 +412,9 @@ class AllocationService {
     }
   }
 
+  /**
+   * Get specific allocation result details with consumer info
+   */
   async getAllocationResultById(id) {
     let result = null;
     let details = [];
@@ -197,10 +425,12 @@ class AllocationService {
 
       if (result) {
         const detRes = await db.query(
-          `SELECT ad.*, u.full_name as consumer_name, u.meter_id
+          `SELECT ad.*, u.full_name as consumer_name, u.meter_id as consumer_meter_id, cp.priority_tier
            FROM allocation_details ad
            JOIN users u ON ad.consumer_id = u.id
-           WHERE ad.allocation_result_id = $1`,
+           LEFT JOIN consumer_profiles cp ON u.id = cp.user_id
+           WHERE ad.allocation_result_id = $1
+           ORDER BY ad.allocated_energy_kwh DESC`,
           [id]
         );
         details = detRes.rows;
@@ -211,100 +441,24 @@ class AllocationService {
         details = db.inMemoryStore.allocation_details
           .filter((d) => d.allocation_result_id === Number(id))
           .map((d) => {
-            const u = db.inMemoryStore.users.find((user) => user.id === d.consumer_id) || {};
+            const user = db.inMemoryStore.users.find((u) => u.id === d.consumer_id) || {};
             return {
               ...d,
-              consumer_name: u.full_name || u.name,
-              meter_id: u.meter_id,
+              consumer_name: user.full_name || "Consumer",
+              consumer_meter_id: user.meter_id || "METER-000",
+              priority_tier: "STANDARD",
             };
           });
       }
     }
 
     if (!result) {
-      throw new AppError("Allocation result not found.", 404);
+      throw new AppError("Allocation result not found", 404);
     }
-
-    return { ...result, details };
-  }
-
-  async compareAllocationAlgorithms() {
-    let requests = [];
-    if (db.isConnected) {
-      const res = await db.query("SELECT * FROM energy_requests WHERE request_status = 'PENDING' ORDER BY id ASC");
-      requests = res.rows;
-    } else {
-      requests = db.inMemoryStore.energy_requests.filter((r) => (r.request_status || r.status) === "PENDING");
-    }
-
-    let totalAvailableSupply = 0;
-    if (db.isConnected) {
-      const res = await db.query("SELECT SUM(available_energy_kwh) as total FROM energy_listings WHERE listing_status = 'ACTIVE'");
-      totalAvailableSupply = Number(res.rows[0].total || 550);
-    } else {
-      totalAvailableSupply = db.inMemoryStore.energy_listings.reduce(
-        (sum, l) => sum + Number(l.available_energy_kwh || 0),
-        0
-      );
-    }
-
-    const testRequests =
-      requests.length > 0
-        ? requests.map((r) => ({
-            id: r.id,
-            consumerId: r.consumer_id,
-            requestedKwh: Number(r.requested_energy_kwh || r.requested_kwh),
-            priorityWeight: Number(r.priority_weight || 1.0),
-          }))
-        : [
-            { id: 1, consumerId: 6, requestedKwh: 80, priorityWeight: 2.0 },
-            { id: 2, consumerId: 5, requestedKwh: 200, priorityWeight: 1.5 },
-            { id: 3, consumerId: 7, requestedKwh: 50, priorityWeight: 1.0 },
-          ];
-
-    // Constrain supply to simulate scarcity benchmark (e.g. 70% of total demand)
-    const totalDemand = testRequests.reduce((sum, r) => sum + r.requestedKwh, 0);
-    const benchmarkSupply = Math.min(totalAvailableSupply, totalDemand * 0.7);
-
-    // 1. FCFS
-    const fcfsRes = allocateFCFS(testRequests, benchmarkSupply);
-    const fcfsJain = calculateJainsIndex(fcfsRes.allocations.map((a) => a.fulfillmentRate));
-
-    // 2. Basic Proportional
-    const propRes = allocateBasicProportional(testRequests, benchmarkSupply);
-    const propJain = calculateJainsIndex(propRes.allocations.map((a) => a.fulfillmentRate));
-
-    // 3. Proposed Demand-Aware Weighted Proportional
-    const weightedRes = allocateProportionally(testRequests, benchmarkSupply);
-    const weightedJain = calculateJainsIndex(weightedRes.allocations.map((a) => a.fulfillmentRate));
 
     return {
-      benchmarkSupplyKwh: Number(benchmarkSupply.toFixed(2)),
-      totalDemandKwh: Number(totalDemand.toFixed(2)),
-      algorithms: {
-        fcfs: {
-          name: "First-Come First-Served (FCFS)",
-          totalAllocatedKwh: fcfsRes.totalAllocatedKwh,
-          jainFairnessIndex: fcfsJain,
-          allocations: fcfsRes.allocations,
-        },
-        basicProportional: {
-          name: "Basic Proportional Allocation",
-          totalAllocatedKwh: propRes.totalAllocatedKwh,
-          jainFairnessIndex: propJain,
-          allocations: propRes.allocations,
-        },
-        proposedWeighted: {
-          name: "Proposed Demand-Aware Weighted Proportional",
-          totalAllocatedKwh: weightedRes.totalAllocatedKwh,
-          jainFairnessIndex: weightedJain,
-          allocations: weightedRes.allocations,
-        },
-      },
-      analysis: {
-        recommendedAlgorithm: "Proposed Demand-Aware Weighted Proportional",
-        fairnessAdvantagePercent: Number((((weightedJain - fcfsJain) / fcfsJain) * 100).toFixed(2)),
-      },
+      ...result,
+      details,
     };
   }
 }

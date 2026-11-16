@@ -19,6 +19,7 @@ const transactionRoutes = require("./routes/transactionRoutes");
 const carbonRoutes = require("./routes/carbonRoutes");
 const certificateRoutes = require("./routes/certificateRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const algorithmRoutes = require("./routes/algorithmRoutes");
 
 const app = express();
 
@@ -67,6 +68,7 @@ function mountModularRoutes(basePath) {
   app.use(`${basePath}/carbon`, carbonRoutes);
   app.use(`${basePath}/certificates`, certificateRoutes);
   app.use(`${basePath}/admin`, adminRoutes);
+  app.use(`${basePath}/algorithms`, algorithmRoutes);
 
   // Backward-compatibility aliases for Phase 1/3 endpoints
   app.use(`${basePath}/market`, marketplaceRoutes);

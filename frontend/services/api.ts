@@ -223,8 +223,39 @@ export const marketplaceApi = {
 };
 
 // -----------------------------------------------------------------------------
-// 5. Allocation Algorithm APIs
+// 5. Allocation & Research Algorithm APIs
 // -----------------------------------------------------------------------------
+export const algorithmsApi = {
+  match: (payload: { pricingRule?: "MIDPOINT" | "PRODUCER_ASK" | "CONSUMER_BID"; listingIds?: number[]; requestIds?: number[] } = {}) =>
+    request<any>("/algorithms/match", { method: "POST", body: JSON.stringify(payload) }),
+
+  allocate: (payload: {
+    algorithm?: "WEIGHTED_PROPORTIONAL" | "PROPORTIONAL" | "FCFS";
+    requestIds?: number[];
+    listingIds?: number[];
+    isSimulation?: boolean;
+  } = {}) => request<any>("/algorithms/allocate", { method: "POST", body: JSON.stringify(payload) }),
+
+  getResultById: (id: string | number) => request<any>(`/algorithms/results/${id}`, { method: "GET" }),
+
+  getMetricsById: (id: string | number) => request<any>(`/algorithms/metrics/${id}`, { method: "GET" }),
+
+  getPricing: (params?: { hourOfDay?: number; energySource?: string; persist?: boolean }) => {
+    const q = new URLSearchParams();
+    if (params?.hourOfDay !== undefined) q.set("hourOfDay", params.hourOfDay.toString());
+    if (params?.energySource) q.set("energySource", params.energySource);
+    if (params?.persist) q.set("persist", "true");
+    return request<any>(`/algorithms/pricing?${q.toString()}`, { method: "GET" });
+  },
+
+  getExperiments: () => request<any[]>("/algorithms/experiments", { method: "GET" }),
+
+  runExperiment: (payload: { scenarioId: string; [key: string]: any }) =>
+    request<any>("/algorithms/experiments/run", { method: "POST", body: JSON.stringify(payload) }),
+
+  compare: () => request<any>("/algorithms/compare", { method: "GET" }),
+};
+
 export const allocationApi = {
   execute: (payload: {
     algorithm?: "WEIGHTED_PROPORTIONAL" | "PROPORTIONAL" | "FCFS";

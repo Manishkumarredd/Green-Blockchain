@@ -55,6 +55,7 @@ export const Sidebar: React.FC<{ activeNavId?: string; onNavSelect?: (id: string
 
   const adminNav: NavItem[] = [
     { id: "overview", label: "System Monitor", icon: LayoutDashboard },
+    { id: "algorithms", label: "Research Algorithms", icon: Sliders, badge: "Phase 7" },
     { id: "matching", label: "Double Auction Clearing", icon: Scale, badge: "Ready" },
     { id: "pricing", label: "TOU & Dynamic Pricing", icon: TrendingUp },
     { id: "users", label: "Meter & User Registry", icon: Users },
