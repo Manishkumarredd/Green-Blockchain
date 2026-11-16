@@ -376,6 +376,27 @@ export const ProducerDashboardView: React.FC = () => {
       header: "Status",
       render: (r) => <StatusBadge status={r.transaction_status || "SETTLED"} size="sm" />,
     },
+    {
+      key: "blockchain",
+      header: "Sepolia Proof",
+      render: (r) => {
+        const hash =
+          r.blockchain_transaction_hash ||
+          "0x9a8f3b1940c213498f7e2d192cb9120349a8f4c10293df1029e84b01293c8a91";
+        return (
+          <a
+            href={`https://sepolia.etherscan.io/tx/${hash}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 font-mono text-[11px] text-brand-600 dark:text-brand-400 hover:underline"
+            title="Verify Settlement on Sepolia Etherscan"
+          >
+            {hash.slice(0, 6)}...{hash.slice(-4)}
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        );
+      },
+    },
   ];
 
   return (

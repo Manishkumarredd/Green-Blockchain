@@ -417,3 +417,30 @@ export const adminApi = {
     return `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1"}/admin/research-analytics/export`;
   },
 };
+
+export const blockchainApi = {
+  getNetwork: () => request<any>("/blockchain/network", { method: "GET" }),
+  getContracts: () => request<any>("/blockchain/contracts", { method: "GET" }),
+  getCertificates: () => request<any>("/blockchain/certificates", { method: "GET" }),
+  verifyCertificate: (id: string | number) =>
+    request<any>(`/blockchain/certificates/${id}/verify`, { method: "GET" }),
+  getTransaction: (id: string) => request<any>(`/blockchain/transactions/${id}`, { method: "GET" }),
+  prepareTrade: (id: string | number, walletAddress?: string, action?: string) =>
+    request<any>(`/blockchain/trades/${id}/prepare`, {
+      method: "POST",
+      body: JSON.stringify({ walletAddress, action }),
+    }),
+  confirmTrade: (
+    id: string | number,
+    payload: { transactionHash: string; contractAddress?: string; networkName?: string; transactionType?: string }
+  ) =>
+    request<any>(`/blockchain/trades/${id}/confirm`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  syncEvents: (fromBlock = 0) =>
+    request<any>("/blockchain/sync", {
+      method: "POST",
+      body: JSON.stringify({ fromBlock }),
+    }),
+};

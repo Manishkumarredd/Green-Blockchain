@@ -392,9 +392,18 @@ export default function ConsumerPurchasesPage() {
                 </p>
               </div>
 
-              <div className="flex justify-end gap-3 pt-2">
+              <div className="flex flex-wrap justify-end gap-3 pt-2">
                 <Button variant="outline" onClick={() => setReceiptModalOpen(false)}>
                   Close
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    window.open(`/verify-certificate/${selectedTx.id}`, "_blank");
+                  }}
+                  leftIcon={<ShieldCheck className="w-4 h-4 text-emerald-500" />}
+                >
+                  View Verified GL-REC
                 </Button>
                 <Button
                   variant="primary"

@@ -6,26 +6,34 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title GreenCertificate
- * @notice ERC-721 token representing a verified Renewable Energy Certificate (REC).
- * Issued after successful P2P energy settlement on GreenLedger.
+ * @notice ERC-721 token representing a verified GreenLedger Renewable Energy Certificate (GL-REC).
+ * Issued exclusively upon verified on-chain or off-chain settled green energy trades.
+ * Strictly prevents duplicate certificate issuance for the same trade hash.
  */
 contract GreenCertificate is ERC721URIStorage, Ownable {
+    // Non-financial legal disclaimer
+    string public constant DISCLAIMER = 
+        "GreenLedger Renewable Energy Certificates (GL-REC) are non-financial environmental attribute tracking tokens for carbon accounting verification only. They do not constitute financial securities, investments, or yield-generating instruments.";
+
     uint256 private _nextTokenId;
 
     struct CertificateData {
         uint256 certificateId;
         address producer;
         address consumer;
-        uint256 energyAmountKwh;    // in milli-kWh or kWh
-        uint256 carbonSavedGrams;   // Grams of CO2 avoided
-        string energySource;        // "SOLAR", "WIND", "HYDRO"
+        uint256 energyAmountKwh;    // Total green kilowatt-hours certified
+        uint256 carbonSavedGrams;   // Grams of CO2 avoided relative to regional baseline
+        string energySource;        // "SOLAR", "WIND", "HYDRO", "BIOMASS"
         uint256 issuanceTimestamp;
-        bytes32 tradeHash;          // Off-chain settlement transaction link
+        bytes32 tradeHash;          // Unique cryptographic hash of trade settlement
         bool isRetired;
     }
 
     // Mapping from tokenId to Certificate metadata
     mapping(uint256 => CertificateData) private _certificates;
+
+    // Mapping from tradeHash to tokenId to strictly prevent double-issuance
+    mapping(bytes32 => uint256) public tradeHashToTokenId;
 
     // Authorized issuers (e.g., EnergyTrading settlement contract)
     mapping(address => bool) public authorizedIssuers;
@@ -48,7 +56,7 @@ contract GreenCertificate is ERC721URIStorage, Ownable {
         _;
     }
 
-    constructor(address initialOwner) ERC721("GreenLedger Renewable Energy Certificate", "G-REC") Ownable(initialOwner) {
+    constructor(address initialOwner) ERC721("GreenLedger Renewable Energy Certificate", "GL-REC") Ownable(initialOwner) {
         _nextTokenId = 1;
     }
 
@@ -59,7 +67,8 @@ contract GreenCertificate is ERC721URIStorage, Ownable {
     }
 
     /**
-     * @notice Issue a new REC to the green consumer
+     * @notice Issue a new GL-REC to the green energy consumer.
+     * Guaranteed uniqueness per trade settlement hash.
      */
     function issueCertificate(
         address toConsumer,
@@ -72,11 +81,17 @@ contract GreenCertificate is ERC721URIStorage, Ownable {
     ) external onlyAuthorized returns (uint256) {
         require(toConsumer != address(0), "GreenCertificate: recipient cannot be zero address");
         require(fromProducer != address(0), "GreenCertificate: producer cannot be zero address");
-        require(energyAmountKwh > 0, "GreenCertificate: energy amount must be greater than zero");
+        require(energyAmountKwh > 0, "GreenCertificate: energy amount must be > 0");
+        require(tradeHash != bytes32(0), "GreenCertificate: trade hash required");
+        require(tradeHashToTokenId[tradeHash] == 0, "GreenCertificate: certificate already issued for trade");
 
         uint256 tokenId = _nextTokenId++;
+        tradeHashToTokenId[tradeHash] = tokenId;
+
         _safeMint(toConsumer, tokenId);
-        _setTokenURI(tokenId, tokenUri);
+        if (bytes(tokenUri).length > 0) {
+            _setTokenURI(tokenId, tokenUri);
+        }
 
         _certificates[tokenId] = CertificateData({
             certificateId: tokenId,
@@ -104,10 +119,10 @@ contract GreenCertificate is ERC721URIStorage, Ownable {
     }
 
     /**
-     * @notice Retire a certificate to claim green offsets
+     * @notice Retire a certificate to claim green environmental attributes (preventing resale/double-counting)
      */
     function retireCertificate(uint256 tokenId) external {
-        require(ownerOf(tokenId) == msg.sender, "GreenCertificate: only owner can retire");
+        require(ownerOf(tokenId) == msg.sender, "GreenCertificate: only certificate owner can retire");
         require(!_certificates[tokenId].isRetired, "GreenCertificate: certificate already retired");
 
         _certificates[tokenId].isRetired = true;
@@ -124,5 +139,15 @@ contract GreenCertificate is ERC721URIStorage, Ownable {
 
     function isCertificateValid(uint256 tokenId) external view returns (bool) {
         return _certificates[tokenId].certificateId != 0 && !_certificates[tokenId].isRetired;
+    }
+
+    function getCertificateByTradeHash(bytes32 tradeHash) external view returns (CertificateData memory) {
+        uint256 tokenId = tradeHashToTokenId[tradeHash];
+        require(tokenId != 0, "GreenCertificate: no certificate found for trade hash");
+        return _certificates[tokenId];
+    }
+
+    function totalCertificatesIssued() external view returns (uint256) {
+        return _nextTokenId - 1;
     }
 }

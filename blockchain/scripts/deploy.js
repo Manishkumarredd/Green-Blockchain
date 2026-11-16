@@ -1,48 +1,136 @@
 const hre = require("hardhat");
+const fs = require("fs");
+const path = require("path");
 
 async function main() {
   const [deployer] = await hre.ethers.getSigners();
+  const network = await hre.ethers.provider.getNetwork();
+
   console.log("==================================================");
-  console.log("Deploying GreenLedger Smart Contracts with account:", deployer ? deployer.address : "Unknown");
-  console.log("Network:", hre.network.name);
+  console.log("GREENLEDGER BLOCKCHAIN DEPLOYMENT (PHASE 9)");
+  console.log("Deployer Address:", deployer ? deployer.address : "Unknown");
+  console.log("Network Name:    ", hre.network.name);
+  console.log("Chain ID:        ", network.chainId.toString());
   console.log("==================================================");
 
-  // 1. Deploy GreenCertificate (ERC-721 REC)
-  console.log("1. Deploying GreenCertificate contract...");
+  // 1. Deploy UserRegistry
+  console.log("1. Deploying UserRegistry contract...");
+  const UserRegistry = await hre.ethers.getContractFactory("UserRegistry");
+  const userRegistry = await UserRegistry.deploy(deployer.address);
+  await userRegistry.waitForDeployment();
+  const userRegistryAddress = await userRegistry.getAddress();
+  console.log(">>> UserRegistry deployed to:     ", userRegistryAddress);
+
+  // 2. Deploy EnergyMarketplace
+  console.log("2. Deploying EnergyMarketplace contract...");
+  const EnergyMarketplace = await hre.ethers.getContractFactory("EnergyMarketplace");
+  const marketplace = await EnergyMarketplace.deploy(deployer.address, userRegistryAddress);
+  await marketplace.waitForDeployment();
+  const marketplaceAddress = await marketplace.getAddress();
+  console.log(">>> EnergyMarketplace deployed to:", marketplaceAddress);
+
+  // 3. Deploy GreenCertificate (GL-REC ERC-721)
+  console.log("3. Deploying GreenCertificate contract...");
   const GreenCertificate = await hre.ethers.getContractFactory("GreenCertificate");
   const greenCertificate = await GreenCertificate.deploy(deployer.address);
   await greenCertificate.waitForDeployment();
   const certAddress = await greenCertificate.getAddress();
-  console.log(">>> GreenCertificate deployed to:", certAddress);
+  console.log(">>> GreenCertificate deployed to: ", certAddress);
 
-  // 2. Deploy EnergyTrading (Settlement & Verification)
-  console.log("2. Deploying EnergyTrading contract...");
+  // 4. Deploy EnergyTrading
+  console.log("4. Deploying EnergyTrading contract...");
   const EnergyTrading = await hre.ethers.getContractFactory("EnergyTrading");
-  const energyTrading = await EnergyTrading.deploy(deployer.address);
+  const energyTrading = await EnergyTrading.deploy(
+    deployer.address,
+    userRegistryAddress,
+    marketplaceAddress,
+    certAddress
+  );
   await energyTrading.waitForDeployment();
   const tradingAddress = await energyTrading.getAddress();
-  console.log(">>> EnergyTrading deployed to:", tradingAddress);
+  console.log(">>> EnergyTrading deployed to:    ", tradingAddress);
 
-  // 3. Link EnergyTrading as authorized issuer in GreenCertificate
-  console.log("3. Authorizing EnergyTrading contract as issuer...");
-  const authTx = await greenCertificate.setAuthorizedIssuer(tradingAddress, true);
-  await authTx.wait();
-  console.log(">>> EnergyTrading successfully authorized as REC issuer.");
+  // 5. Wire authorizations
+  console.log("5. Configuring contract authorizations...");
+  const tx1 = await greenCertificate.setAuthorizedIssuer(tradingAddress, true);
+  await tx1.wait();
+  console.log(">>> EnergyTrading authorized as REC issuer in GreenCertificate.");
 
-  // 4. Link GreenCertificate inside EnergyTrading
-  console.log("4. Setting GreenCertificate address in EnergyTrading...");
-  const setCertTx = await energyTrading.setCertificateContract(certAddress);
-  await setCertTx.wait();
-  console.log(">>> Certificate contract registered in EnergyTrading.");
+  const tx2 = await marketplace.setAuthorizedCaller(tradingAddress, true);
+  await tx2.wait();
+  console.log(">>> EnergyTrading authorized as caller in EnergyMarketplace.");
+
+  // Read ABIs
+  const userRegistryArtifact = await hre.artifacts.readArtifact("UserRegistry");
+  const marketplaceArtifact = await hre.artifacts.readArtifact("EnergyMarketplace");
+  const certArtifact = await hre.artifacts.readArtifact("GreenCertificate");
+  const tradingArtifact = await hre.artifacts.readArtifact("EnergyTrading");
+
+  const deploymentData = {
+    network: hre.network.name,
+    chainId: Number(network.chainId),
+    deployer: deployer.address,
+    deployedAt: new Date().toISOString(),
+    contracts: {
+      UserRegistry: {
+        address: userRegistryAddress,
+        abi: userRegistryArtifact.abi
+      },
+      EnergyMarketplace: {
+        address: marketplaceAddress,
+        abi: marketplaceArtifact.abi
+      },
+      GreenCertificate: {
+        address: certAddress,
+        abi: certArtifact.abi
+      },
+      EnergyTrading: {
+        address: tradingAddress,
+        abi: tradingArtifact.abi
+      }
+    }
+  };
+
+  // Target paths for frontend and backend
+  const targets = [
+    path.resolve(__dirname, "../../frontend/contracts/deployedContracts.json"),
+    path.resolve(__dirname, "../../backend/src/blockchain/deployedContracts.json")
+  ];
+
+  for (const targetPath of targets) {
+    const dir = path.dirname(targetPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(targetPath, JSON.stringify(deploymentData, null, 2), "utf8");
+    console.log(`>>> Exported deployment manifest to: ${targetPath}`);
+  }
+
+  // Also create a quick TypeScript helper for frontend
+  const tsHelperPath = path.resolve(__dirname, "../../frontend/contracts/index.ts");
+  const tsHelperContent = `// Auto-generated by blockchain/scripts/deploy.js
+import deployedContracts from "./deployedContracts.json";
+
+export const DEPLOYED_CONTRACTS = deployedContracts;
+export const USER_REGISTRY_ADDRESS = deployedContracts.contracts.UserRegistry.address;
+export const ENERGY_MARKETPLACE_ADDRESS = deployedContracts.contracts.EnergyMarketplace.address;
+export const GREEN_CERTIFICATE_ADDRESS = deployedContracts.contracts.GreenCertificate.address;
+export const ENERGY_TRADING_ADDRESS = deployedContracts.contracts.EnergyTrading.address;
+
+export const USER_REGISTRY_ABI = deployedContracts.contracts.UserRegistry.abi;
+export const ENERGY_MARKETPLACE_ABI = deployedContracts.contracts.EnergyMarketplace.abi;
+export const GREEN_CERTIFICATE_ABI = deployedContracts.contracts.GreenCertificate.abi;
+export const ENERGY_TRADING_ABI = deployedContracts.contracts.EnergyTrading.abi;
+`;
+  fs.writeFileSync(tsHelperPath, tsHelperContent, "utf8");
+  console.log(`>>> Exported TypeScript index to: ${tsHelperPath}`);
 
   console.log("==================================================");
-  console.log("DEPLOYMENT COMPLETED SUCCESSFULLY");
-  console.log("NEXT_PUBLIC_SETTLEMENT_CONTRACT_ADDRESS=" + tradingAddress);
-  console.log("NEXT_PUBLIC_CERTIFICATE_CONTRACT_ADDRESS=" + certAddress);
+  console.log("ALL CONTRACTS DEPLOYED & CONFIGURED SUCCESSFULLY!");
   console.log("==================================================");
 }
 
 main().catch((error) => {
-  console.error("Deployment failed:", error);
+  console.error("Deployment script failed:", error);
   process.exitCode = 1;
 });
