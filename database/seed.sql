@@ -3,15 +3,15 @@
 -- Realistic Simulated Data for Producers, Consumers, and Initial Market State
 -- ==============================================================================
 
--- 1. Insert Initial Platform Admin & Users
-INSERT INTO users (id, wallet_address, email, name, role, meter_id, reputation_score) VALUES
-(1, '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', 'admin@greenledger.io', 'System Administrator', 'ADMIN', 'METER-ADMIN-000', 100.00),
-(2, '0x70997970C51812dc3A010C7d01b50e0d17dc79C8', 'producer.solarfarm@greenledger.io', 'Helios Solar Park', 'PRODUCER', 'METER-PROD-SOL-101', 99.20),
-(3, '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC', 'producer.windridge@greenledger.io', 'AeroFlow Wind Station', 'PRODUCER', 'METER-PROD-WND-202', 98.50),
-(4, '0x90F79bf6EB2c4f870365E785982E1f101E93b906', 'producer.hydropeak@greenledger.io', 'Cascadia Hydro Plant', 'PRODUCER', 'METER-PROD-HYD-303', 99.80),
-(5, '0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65', 'consumer.datacenter@ecotech.com', 'EcoCloud Data Center', 'CONSUMER', 'METER-CONS-DAT-501', 100.00),
-(6, '0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc', 'consumer.hospital@metrohealth.org', 'Metro Green Hospital', 'CONSUMER', 'METER-CONS-HOS-502', 99.70),
-(7, '0x976EA74026E726554dB657fA54763abd0C3a0aa9', 'consumer.residential@ecovillage.org', 'Sunburst Eco-Community', 'CONSUMER', 'METER-CONS-RES-503', 97.40);
+-- 1. Insert Initial Platform Admin & Users (Default password: Password123!)
+INSERT INTO users (id, wallet_address, email, password_hash, name, role, meter_id, reputation_score) VALUES
+(1, '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', 'admin@greenledger.io', '$2b$10$6HMrzf5y6Mt7HgvwPAvse.M0/dPmNoF1MLrvBtXFCiRNEEg1FAro6', 'System Administrator', 'ADMIN', 'METER-ADMIN-000', 100.00),
+(2, '0x70997970C51812dc3A010C7d01b50e0d17dc79C8', 'producer.solarfarm@greenledger.io', '$2b$10$6HMrzf5y6Mt7HgvwPAvse.M0/dPmNoF1MLrvBtXFCiRNEEg1FAro6', 'Helios Solar Park', 'PRODUCER', 'METER-PROD-SOL-101', 99.20),
+(3, '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC', 'producer.windridge@greenledger.io', '$2b$10$6HMrzf5y6Mt7HgvwPAvse.M0/dPmNoF1MLrvBtXFCiRNEEg1FAro6', 'AeroFlow Wind Station', 'PRODUCER', 'METER-PROD-WND-202', 98.50),
+(4, '0x90F79bf6EB2c4f870365E785982E1f101E93b906', 'producer.hydropeak@greenledger.io', '$2b$10$6HMrzf5y6Mt7HgvwPAvse.M0/dPmNoF1MLrvBtXFCiRNEEg1FAro6', 'Cascadia Hydro Plant', 'PRODUCER', 'METER-PROD-HYD-303', 99.80),
+(5, '0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65', 'consumer.datacenter@ecotech.com', '$2b$10$6HMrzf5y6Mt7HgvwPAvse.M0/dPmNoF1MLrvBtXFCiRNEEg1FAro6', 'EcoCloud Data Center', 'CONSUMER', 'METER-CONS-DAT-501', 100.00),
+(6, '0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc', 'consumer.hospital@metrohealth.org', '$2b$10$6HMrzf5y6Mt7HgvwPAvse.M0/dPmNoF1MLrvBtXFCiRNEEg1FAro6', 'Metro Green Hospital', 'CONSUMER', 'METER-CONS-HOS-502', 99.70),
+(7, '0x976EA74026E726554dB657fA54763abd0C3a0aa9', 'consumer.residential@ecovillage.org', '$2b$10$6HMrzf5y6Mt7HgvwPAvse.M0/dPmNoF1MLrvBtXFCiRNEEg1FAro6', 'Sunburst Eco-Community', 'CONSUMER', 'METER-CONS-RES-503', 97.40);
 
 -- Reset user sequence to avoid collision
 ALTER SEQUENCE users_id_seq RESTART WITH 10;

@@ -37,7 +37,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>("light");
   const [role, setRole] = useState<UserRole>("PRODUCER");
-  const [activeView, setActiveView] = useState<ActiveView>("dashboard");
+  const [activeView, setActiveView] = useState<ActiveView>("landing");
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
   const [isWalletConnected, setIsWalletConnected] = useState<boolean>(true);
   const [walletAddress, setWalletAddress] = useState<string>("0x70997970C51812dc3A010C7d01b50e0d17dc79C8");

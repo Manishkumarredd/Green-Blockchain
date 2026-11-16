@@ -5,15 +5,18 @@ let pool = null;
 let isConnected = false;
 
 // Fallback in-memory storage for seamless local development if Postgres is not active
+// All pre-seeded accounts have default password: Password123!
+const DEFAULT_HASH = "$2b$10$6HMrzf5y6Mt7HgvwPAvse.M0/dPmNoF1MLrvBtXFCiRNEEg1FAro6";
+
 const inMemoryStore = {
   users: [
-    { id: 1, wallet_address: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", email: "admin@greenledger.io", name: "System Administrator", role: "ADMIN", meter_id: "METER-ADMIN-000", is_active: true, reputation_score: 100 },
-    { id: 2, wallet_address: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", email: "producer.solarfarm@greenledger.io", name: "Helios Solar Park", role: "PRODUCER", meter_id: "METER-PROD-SOL-101", is_active: true, reputation_score: 99.2 },
-    { id: 3, wallet_address: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC", email: "producer.windridge@greenledger.io", name: "AeroFlow Wind Station", role: "PRODUCER", meter_id: "METER-PROD-WND-202", is_active: true, reputation_score: 98.5 },
-    { id: 4, wallet_address: "0x90F79bf6EB2c4f870365E785982E1f101E93b906", email: "producer.hydropeak@greenledger.io", name: "Cascadia Hydro Plant", role: "PRODUCER", meter_id: "METER-PROD-HYD-303", is_active: true, reputation_score: 99.8 },
-    { id: 5, wallet_address: "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65", email: "consumer.datacenter@ecotech.com", name: "EcoCloud Data Center", role: "CONSUMER", meter_id: "METER-CONS-DAT-501", is_active: true, reputation_score: 100 },
-    { id: 6, wallet_address: "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc", email: "consumer.hospital@metrohealth.org", name: "Metro Green Hospital", role: "CONSUMER", meter_id: "METER-CONS-HOS-502", is_active: true, reputation_score: 99.7 },
-    { id: 7, wallet_address: "0x976EA74026E726554dB657fA54763abd0C3a0aa9", email: "consumer.residential@ecovillage.org", name: "Sunburst Eco-Community", role: "CONSUMER", meter_id: "METER-CONS-RES-503", is_active: true, reputation_score: 97.4 }
+    { id: 1, wallet_address: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", email: "admin@greenledger.io", password_hash: DEFAULT_HASH, name: "System Administrator", role: "ADMIN", meter_id: "METER-ADMIN-000", is_active: true, reputation_score: 100 },
+    { id: 2, wallet_address: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", email: "producer.solarfarm@greenledger.io", password_hash: DEFAULT_HASH, name: "Helios Solar Park", role: "PRODUCER", meter_id: "METER-PROD-SOL-101", is_active: true, reputation_score: 99.2 },
+    { id: 3, wallet_address: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC", email: "producer.windridge@greenledger.io", password_hash: DEFAULT_HASH, name: "AeroFlow Wind Station", role: "PRODUCER", meter_id: "METER-PROD-WND-202", is_active: true, reputation_score: 98.5 },
+    { id: 4, wallet_address: "0x90F79bf6EB2c4f870365E785982E1f101E93b906", email: "producer.hydropeak@greenledger.io", password_hash: DEFAULT_HASH, name: "Cascadia Hydro Plant", role: "PRODUCER", meter_id: "METER-PROD-HYD-303", is_active: true, reputation_score: 99.8 },
+    { id: 5, wallet_address: "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65", email: "consumer.datacenter@ecotech.com", password_hash: DEFAULT_HASH, name: "EcoCloud Data Center", role: "CONSUMER", meter_id: "METER-CONS-DAT-501", is_active: true, reputation_score: 100 },
+    { id: 6, wallet_address: "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc", email: "consumer.hospital@metrohealth.org", password_hash: DEFAULT_HASH, name: "Metro Green Hospital", role: "CONSUMER", meter_id: "METER-CONS-HOS-502", is_active: true, reputation_score: 99.7 },
+    { id: 7, wallet_address: "0x976EA74026E726554dB657fA54763abd0C3a0aa9", email: "consumer.residential@ecovillage.org", password_hash: DEFAULT_HASH, name: "Sunburst Eco-Community", role: "CONSUMER", meter_id: "METER-CONS-RES-503", is_active: true, reputation_score: 97.4 }
   ],
   listings: [
     { id: 1, producer_id: 2, energy_source: "SOLAR", quantity_kwh: 150, available_kwh: 150, unit_price_eth: "0.000088", status: "ACTIVE" },

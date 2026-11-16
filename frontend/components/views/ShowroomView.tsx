@@ -27,7 +27,7 @@ import { FilterDropdown } from "../ui/FilterDropdown";
 import { Pagination } from "../ui/Pagination";
 import { Modal } from "../ui/Modal";
 import { ConfirmationDialog } from "../ui/ConfirmationDialog";
-import { LoadingSkeleton, Skeleton, SkeletonCard, SkeletonTable } from "../ui/LoadingSkeleton";
+import { Skeleton, SkeletonCard, SkeletonTable } from "../ui/LoadingSkeleton";
 import { EmptyState } from "../ui/EmptyState";
 import { ErrorState } from "../ui/ErrorState";
 import { ChartContainer } from "../ui/ChartContainer";

@@ -163,7 +163,24 @@ cd frontend
 npm install
 npm run dev
 ```
-The dashboard will be available at `http://localhost:3000`.
+The application will be accessible at `http://localhost:3000`:
+- **Landing Page**: `http://localhost:3000/`
+- **Login Portal**: `http://localhost:3000/login`
+- **Registration Portal**: `http://localhost:3000/register`
+- **Forgot Password**: `http://localhost:3000/forgot-password`
+- **Producer Dashboard**: `http://localhost:3000/producer/dashboard`
+- **Consumer Dashboard**: `http://localhost:3000/consumer/dashboard`
+- **Administrator Dashboard**: `http://localhost:3000/admin/dashboard`
+
+### 5.5. Running Unit & Integration Tests
+Run both algorithm and authentication test suites:
+```bash
+node --test backend/src/tests/algorithms.test.js backend/src/tests/auth.test.js
+```
+Or build the Next.js production bundle:
+```bash
+npm --prefix frontend run build
+```
 
 ### 5.5. Running Blockchain Smart Contracts (Hardhat)
 ```bash
@@ -200,13 +217,17 @@ psql -d greenledger_db -f database/seed.sql
 
 ---
 
-## 7. Phase 1 Deliverables Summary
+## 7. Phase Completion & Progress Summary
 
-- [x] Initial workspace inspection and clean monorepo directory scaffolding.
-- [x] System architecture specification with 9 comprehensive Mermaid diagrams.
-- [x] Complete PostgreSQL database schema (`schema.sql`) and realistic seed data (`seed.sql`).
-- [x] Fully implemented and unit-tested rule-based algorithmic core (Proportional Allocation, Greedy Matching, Dynamic Pricing, Carbon Offsets, Generation Physics Simulation).
-- [x] Express.js REST API with modular routers, JWT auth, RBAC guards, and in-memory mock fallback.
-- [x] Solidity smart contracts (`EnergyTrading.sol` and `GreenCertificate.sol` ERC-721 REC) with deployment scripts and test suite.
-- [x] Next.js 15 Web3 frontend dashboard scaffolded with Tailwind CSS, Lucide React, and Wagmi/Viem configuration.
-- [x] Zero ML/DL, zero physical hardware, and zero Hyperledger dependencies.
+- [x] **Phase 1: Project Initialization & System Architecture**
+  - Monorepo structure, 9 Mermaid architecture diagrams, PostgreSQL schema, Hardhat smart contracts (`EnergyTrading.sol`, `GreenCertificate.sol`), and algorithmic engines.
+- [x] **Phase 2: Professional UI/UX Design System**
+  - Brand identity, vector logo, color system, typography, 22 reusable components, public/auth/dashboard layouts, component showroom, and light/dark theme foundation.
+- [x] **Phase 3: Landing Page, Authentication & User Registration**
+  - High-converting commercial landing page with simulated telemetry indicators, research allocation benchmark comparison, 4-step workflow, and carbon impact metrics.
+  - Dedicated authentication pages: `/login`, `/register`, `/forgot-password`.
+  - Role-based separation for **Producer** and **Consumer** registration (public admin registration forbidden).
+  - Backend authentication with bcryptjs password hashing, JWT token issuance, protected endpoints, and duplicate email prevention.
+  - Non-custodial MetaMask Web3 wallet integration with Sepolia network detection and signature nonce flow.
+  - Dedicated role dashboard routes: `/producer/dashboard`, `/consumer/dashboard`, `/admin/dashboard`.
+  - 18 passing backend test suites and successful Next.js 15 production build.

@@ -21,11 +21,14 @@ DROP TABLE IF EXISTS users CASCADE;
 -- ------------------------------------------------------------------------------
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
-    wallet_address VARCHAR(42) UNIQUE NOT NULL,
-    email VARCHAR(255) UNIQUE,
+    wallet_address VARCHAR(42) UNIQUE,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
     name VARCHAR(120) NOT NULL,
+    phone VARCHAR(30),
     role VARCHAR(20) NOT NULL CHECK (role IN ('PRODUCER', 'CONSUMER', 'ADMIN')),
     meter_id VARCHAR(100) UNIQUE NOT NULL,
+    nonce VARCHAR(100),
     is_active BOOLEAN DEFAULT TRUE,
     reputation_score NUMERIC(5, 2) DEFAULT 100.00,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
