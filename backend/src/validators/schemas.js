@@ -99,10 +99,25 @@ const issueCertificateSchema = z.object({
   transactionId: z.number().int().positive("Valid transaction ID required"),
 });
 
-// 9. Admin Settings Schema
+// 9. Admin Schemas
 const updateSettingSchema = z.object({
-  key: z.string().min(1, "Setting key is required"),
-  value: z.string().min(1, "Setting value is required"),
+  key: z.string().min(1, "Setting key is required").optional(),
+  value: z.union([z.string(), z.number()]).optional(),
+  settings: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
+});
+
+const updateUserStatusSchema = z.object({
+  status: z.enum(["ACTIVE", "SUSPENDED", "INACTIVE"], {
+    errorMap: () => ({ message: "Status must be ACTIVE, SUSPENDED, or INACTIVE" }),
+  }),
+  reason: z.string().max(300).optional(),
+});
+
+const updateListingStatusSchema = z.object({
+  status: z.enum(["ACTIVE", "SUSPENDED", "CANCELLED"], {
+    errorMap: () => ({ message: "Status must be ACTIVE, SUSPENDED, or CANCELLED" }),
+  }),
+  reason: z.string().max(300).optional(),
 });
 
 module.exports = {
@@ -118,4 +133,6 @@ module.exports = {
   createTransactionSchema,
   issueCertificateSchema,
   updateSettingSchema,
+  updateUserStatusSchema,
+  updateListingStatusSchema,
 };

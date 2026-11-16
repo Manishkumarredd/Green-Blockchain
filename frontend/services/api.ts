@@ -325,9 +325,95 @@ export const certificatesApi = {
 // -----------------------------------------------------------------------------
 export const adminApi = {
   getDashboard: () => request<any>("/admin/dashboard", { method: "GET" }),
-  getUsers: () => request<any[]>("/admin/users", { method: "GET" }),
-  getTransactions: () => request<any[]>("/admin/transactions", { method: "GET" }),
-  getListings: () => request<any[]>("/admin/listings", { method: "GET" }),
-  updateSetting: (key: string, value: string) =>
-    request<any>("/admin/settings", { method: "PUT", body: JSON.stringify({ key, value }) }),
+
+  getUsers: (params: {
+    search?: string;
+    role?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: string;
+  } = {}) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
+    });
+    return request<any>(`/admin/users?${q.toString()}`, { method: "GET" });
+  },
+
+  getUserById: (id: string | number) => request<any>(`/admin/users/${id}`, { method: "GET" }),
+
+  updateUserStatus: (id: string | number, payload: { status: "ACTIVE" | "SUSPENDED" | "INACTIVE"; reason?: string }) =>
+    request<any>(`/admin/users/${id}/status`, { method: "PATCH", body: JSON.stringify(payload) }),
+
+  getListings: (params: {
+    search?: string;
+    source?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  } = {}) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
+    });
+    return request<any>(`/admin/listings?${q.toString()}`, { method: "GET" });
+  },
+
+  updateListingStatus: (id: string | number, payload: { status: "ACTIVE" | "SUSPENDED" | "CANCELLED"; reason?: string }) =>
+    request<any>(`/admin/listings/${id}/status`, { method: "PATCH", body: JSON.stringify(payload) }),
+
+  getRequests: (params: {
+    search?: string;
+    status?: string;
+    priority?: string;
+    page?: number;
+    limit?: number;
+  } = {}) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
+    });
+    return request<any>(`/admin/requests?${q.toString()}`, { method: "GET" });
+  },
+
+  getTransactions: (params: {
+    search?: string;
+    status?: string;
+    producerId?: string | number;
+    consumerId?: string | number;
+    page?: number;
+    limit?: number;
+  } = {}) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
+    });
+    return request<any>(`/admin/transactions?${q.toString()}`, { method: "GET" });
+  },
+
+  getSettings: () => request<any>("/admin/settings", { method: "GET" }),
+
+  updateSettings: (payload: { settings?: Record<string, any>; key?: string; value?: any }) =>
+    request<any>("/admin/settings", { method: "PUT", body: JSON.stringify(payload) }),
+
+  getActivityLogs: (params: { action?: string; page?: number; limit?: number } = {}) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
+    });
+    return request<any>(`/admin/activity-logs?${q.toString()}`, { method: "GET" });
+  },
+
+  getResearchAnalytics: (params?: { scenarioKey?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.scenarioKey) q.set("scenarioKey", params.scenarioKey);
+    return request<any>(`/admin/research-analytics?${q.toString()}`, { method: "GET" });
+  },
+
+  exportResearchAnalyticsCsv: () => {
+    // Returns full download URL
+    return `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1"}/admin/research-analytics/export`;
+  },
 };

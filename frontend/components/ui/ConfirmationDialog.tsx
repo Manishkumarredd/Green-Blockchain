@@ -8,13 +8,14 @@ export interface ConfirmationDialogProps {
   onClose: () => void;
   onConfirm: () => void;
   title: string;
-  message: string;
+  message?: string;
+  description?: string;
   confirmText?: string;
   confirmLabel?: string;
   cancelText?: string;
   cancelLabel?: string;
-  type?: "danger" | "warning" | "info" | "success";
-  variant?: "danger" | "warning" | "info" | "success";
+  type?: "danger" | "warning" | "info" | "success" | "primary";
+  variant?: "danger" | "warning" | "info" | "success" | "primary";
   isLoading?: boolean;
   loading?: boolean;
 }
@@ -25,6 +26,7 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
   onConfirm,
   title,
   message,
+  description,
   confirmText = "Confirm",
   confirmLabel,
   cancelText = "Cancel",
@@ -34,10 +36,13 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
   isLoading = false,
   loading = false,
 }) => {
-  const dialogType = type || variant || "warning";
+  const rawType = type || variant || "warning";
+  const dialogType: "danger" | "warning" | "info" | "success" =
+    rawType === "primary" ? "info" : rawType;
   const activeLoading = isLoading || loading;
   const resolvedConfirmText = confirmLabel || confirmText;
   const resolvedCancelText = cancelLabel || cancelText;
+  const resolvedMessage = description || message || "";
 
   const iconConfig = {
     danger: {
@@ -76,7 +81,7 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
         </h3>
 
         <p className="text-xs sm:text-sm text-navy-500 dark:text-navy-400 leading-relaxed mb-6">
-          {message}
+          {resolvedMessage}
         </p>
 
         <div className="flex items-center gap-3 w-full">

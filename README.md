@@ -6,7 +6,7 @@
 [![Express.js](https://img.shields.io/badge/Express.js-4.21.2-lightgrey?logo=express)](https://expressjs.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16%2B-336791?logo=postgresql)](https://www.postgresql.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests Passing](https://img.shields.io/badge/Tests-56%2F56%20Passing-brightgreen)](backend/src/tests)
+[![Tests Passing](https://img.shields.io/badge/Tests-68%2F68%20Passing-brightgreen)](backend/src/tests)
 
 ---
 
@@ -229,7 +229,89 @@ The table below summarizes deterministic evaluation across 6 microgrid scenarios
 
 ---
 
-## 8. Automated Test Suite
+## 8. Phase 8: Admin Dashboard, Platform Governance & Research Analytics
+
+Phase 8 implements the complete centralized administrative governance and empirical research surveillance suite for GreenLedger:
+
+### 1. Platform Governance Dashboard (`/admin/dashboard`)
+- **9 Core Real-Time KPI Cards**:
+  - Total Registered Users (Producers, Consumers, Administrators).
+  - Active Energy Listings & Available Microgrid Capacity (kWh).
+  - Total Energy Listed vs. Total Energy Traded (kWh).
+  - Pending Demands Queue & Completed Settlements Count.
+  - Cumulative Avoided Carbon Emissions (kg $\text{CO}_2$ against the 0.82 kg/kWh CEA baseline factor).
+  - Total Economic Settlement Value in ETH.
+- **6 Recharts Analytical Visualizations**:
+  1. *User Registration Trends* (Producers vs. Consumers onboarding over time).
+  2. *Energy Listed vs. Traded* (Microgrid capacity utilization and clearing efficiency).
+  3. *Monthly Settlement Volume* (Cumulative ETH value and trade count).
+  4. *Renewable Energy Source Mix* (Donut breakdown across Solar, Wind, Hydro, Biomass, Hybrid).
+  5. *Role Composition* (Proportion of ecosystem participants).
+  6. *Governance & API Activity Trends* (Surveillance actions and secure authentication volume).
+- **6 Real-Time Surveillance Sections**:
+  - Recent Settled Transactions Table with producer/consumer meter identifiers.
+  - Recent User Registrations Feed with role designation and meter IDs.
+  - Pending Energy Requests Queue awaiting Phase 7 market clearing.
+  - Recent Generation Listings Feed with available vs. total capacity progress bars.
+  - Latest Clearing Execution Summary Card (Jain's index, energy cleared, runtime latency).
+  - System Activity Log Feed showing chronological governance events.
+
+### 2. User Registry & Identity Verification (`/admin/users`)
+- **Full Directory**: Text search across full name, email, Ethereum wallet address, and smart meter ID.
+- **Multi-Factor Filters**: Filter by role (`PRODUCER`, `CONSUMER`, `ADMIN`) and account status (`ACTIVE`, `SUSPENDED`, `INACTIVE`).
+- **Profile Deep-Dive Modal**: Inspect linked smart meter telemetry, Ethereum wallet connection status, and aggregate trading volume.
+- **Security Guardrails**:
+  - Only authorized administrators can access user management.
+  - **Self-Deactivation Prevention**: Administrators are strictly blocked from deactivating or suspending their own active session.
+  - Passwords, bcrypt hashes, JWTs, and private credentials are permanently omitted from responses.
+
+### 3. Energy Listing Moderation (`/admin/listings`)
+- Surveillance table showing Listing ID, Producer, Energy Source, Total & Available Capacity, Price per kWh, and Status.
+- Filter by generation technology (`SOLAR`, `WIND`, `HYDRO`, `BIOMASS`, `HYBRID`) and status (`ACTIVE`, `SUSPENDED`, `CANCELLED`).
+- Moderation actions with confirmation dialogs (suspending/reactivating suspicious listings).
+- **Invariant**: Listing moderation preserves historical transaction ledgers and does not mutate settled on-chain trades.
+
+### 4. Consumer Demand Queue (`/admin/requests`)
+- Surveillance of active consumer purchase demands entering the double-auction matching engine.
+- Filters by status (`PENDING`, `PARTIALLY_MATCHED`, `FULFILLED`, `CANCELLED`) and priority weight tier (`CRITICAL 2.0x`, `COMMERCIAL 1.5x`, `STANDARD 1.0x`).
+- Inspect consumer notes, requested volumes, and maximum willingness-to-pay.
+- **Algorithmic Integrity**: Manual tampering with allocation outcomes is blocked; fulfillment is governed exclusively by Phase 7 DA-WPA.
+
+### 5. Settlement Ledger (`/admin/transactions`)
+- Complete audit directory of settled peer-to-peer electricity trades.
+- Search by transaction ID, producer name, consumer name, or Ethereum transaction hash.
+- Detailed modal receipt with quantity, unit tariff, total ETH value, and 1-click Sepolia Etherscan verification link.
+- Strictly authentic hashes: zero fabricated blockchain settlement confirmations.
+
+### 6. Platform Governance Settings (`/admin/settings`)
+- Configurable microgrid parameters persisted to the PostgreSQL `platform_settings` table:
+  - **Platform Parameters**: Protocol name, escrow platform fee rate (1.5%).
+  - **Dynamic Tariff Bounds**: Base grid reference tariff, minimum floor $P_{\min}$, maximum safety ceiling $P_{\max}$, and demand-to-supply elasticity thresholds ($R < 0.50$, $R > 1.00$).
+  - **Priority Multipliers**: Critical Healthcare load ($2.0\times$), Commercial Data Centers ($1.5\times$), Standard Residential ($1.0\times$).
+  - **Environmental Baseline**: Standard 0.8200 kg $\text{CO}_2$/kWh CEA India power sector baseline factor with full source documentation.
+- Parameter changes are validated on the backend and recorded in the audit trail.
+
+### 7. Research Analytics & Empirical Lab (`/admin/research-analytics`)
+- Dedicated research dashboard integrating actual Phase 7 empirical outputs across all 6 scenarios:
+  1. *Scarcity (Low Supply, High Demand)*
+  2. *Surplus (High Supply, Low Demand)*
+  3. *Balanced Market*
+  4. *Unequal Demand Disparity*
+  5. *Multi-Producer Double Auction*
+  6. *Stress Test (50+ Nodes)*
+- Compares FCFS, Basic Proportional, and Proposed DA-WPA across 7 core metrics.
+- Recharts visualizations comparing Jain's Fairness Index, Fulfillment Ratios, and sub-millisecond execution latency.
+- **RFC 4180 CSV Export**: One-click download of all empirical scenario benchmarks (`/api/v1/admin/research-analytics/export`).
+- Explicit academic simulation disclaimer isolating synthetic experiments from commercial financial ledgers.
+
+### 8. System Activity Logs & Audit Trail (`/admin/activity-logs`)
+- Immutable chronological journal of governance actions (`USER_STATUS_CHANGE`, `LISTING_MODERATION`, `PLATFORM_SETTINGS_UPDATE`, `SYSTEM_STARTUP`).
+- Captures operator ID, action type, target record, timestamp, and audit description.
+- Read-only interface with action type filtering and pagination.
+
+---
+
+## 9. Automated Test Suite
 
 Run all automated unit and integration tests:
 
@@ -237,21 +319,34 @@ Run all automated unit and integration tests:
 npm --prefix backend test
 ```
 
-**Results: 56 passing tests in <750ms**, covering:
-- **Phase 7 Algorithmic Invariants & Verification**:
-  1. Total allocated energy never exceeds available supply ($\sum x_i \le S$).
-  2. No consumer receives more than requested ($\forall i, x_i \le d_i$).
-  3. Non-negative allocation invariant ($\forall i, x_i \ge 0$).
-  4. Correct iterative surplus redistribution when demand caps are reached.
-  5. FCFS strictly allocates in chronological timestamp order.
-  6. Basic Proportional Allocation follows uniform weights ($w_i = 1.0$) with demand caps.
-  7. Price-Aware Greedy Matching respects Ask $\le$ Bid constraints and merit-order ranking.
-  8. Dynamic Pricing strictly enforces $[P_{\min}, P_{\max}]$ regulatory bounds.
-  9. Jain's Fairness Index edge case handling (equal values, single participant, all zeros, empty list, severe inequality).
-  10. 100% PRNG reproducibility with identical random seeds.
-  11. Deterministic execution of all 6 standard research experiment scenarios.
-  12. Simulation mode isolation (allocations executed without mutating database records).
-- **Phase 1–6 Integration & Unit Tests**:
+**Results: 68 passing tests in <900ms**, covering:
+- **Phase 8 Admin & Platform Governance Verification (12 tests)**:
+  1. Role authorization guards: Producer and Consumer tokens rejected on all admin routes (403 Forbidden).
+  2. Admin dashboard returns 9 complete platform KPIs, 6 Recharts analytics series, and 6 real-time feeds.
+  3. User management: search by text, role filtering, pagination, and safe projection excluding passwords/hashes.
+  4. User profile inspection with linked microgrid activity stats.
+  5. Security guardrail: Administrators cannot deactivate their own account.
+  6. User status update and audit trail logging (`USER_STATUS_CHANGE`).
+  7. Energy listing search, source filtering, and moderation (`LISTING_MODERATION`).
+  8. Energy request queue inspection, pagination, and priority tier verification.
+  9. Transaction ledger inspection with authentic blockchain transaction hashes.
+  10. Platform settings retrieval, validation, and persistence with audit logging.
+  11. Research analytics output for all 6 scenarios and RFC 4180 CSV export.
+  12. Validation schemas for user status, listing status, and platform settings.
+- **Phase 7 Algorithmic Invariants & Verification (12 tests)**:
+  - Total allocated energy never exceeds available supply ($\sum x_i \le S$).
+  - No consumer receives more than requested ($\forall i, x_i \le d_i$).
+  - Non-negative allocations invariant ($\forall i, x_i \ge 0$).
+  - Surplus redistribution verified when demand caps are reached.
+  - FCFS follows chronological timestamp order.
+  - Basic Proportional follows uniform weights ($w_i = 1.0$).
+  - Price-Aware Greedy Matching respects $p_{\text{ask}} \le p_{\text{bid}}$ constraints.
+  - Dynamic pricing respects $[P_{\min}, P_{\max}]$ bounds.
+  - Jain's Fairness Index edge cases (equal values, single participant, all zeros, empty list, severe inequality).
+  - 100% PRNG reproducibility across identical seeds.
+  - Deterministic execution of all 6 standard research experiment scenarios.
+  - Simulation mode isolation (allocations execute without mutating database inventory).
+- **Phase 1–6 Integration & Unit Tests (44 tests)**:
   - PostgreSQL dual-mode connectivity and health
   - User registration, login, bcrypt hashing, and JWT verification
   - Role authorization guards (`PRODUCER`, `CONSUMER`, `ADMIN`)
@@ -269,7 +364,7 @@ npm --prefix backend test
 
 ---
 
-## 9. How to Run Locally
+## 10. How to Run Locally
 
 ### Start Backend API Server:
 ```bash

@@ -54,12 +54,15 @@ export const Sidebar: React.FC<{ activeNavId?: string; onNavSelect?: (id: string
   ];
 
   const adminNav: NavItem[] = [
-    { id: "overview", label: "System Monitor", icon: LayoutDashboard },
-    { id: "algorithms", label: "Research Algorithms", icon: Sliders, badge: "Phase 7" },
-    { id: "matching", label: "Double Auction Clearing", icon: Scale, badge: "Ready" },
-    { id: "pricing", label: "TOU & Dynamic Pricing", icon: TrendingUp },
-    { id: "users", label: "Meter & User Registry", icon: Users },
-    { id: "audit", label: "On-Chain Audit Trail", icon: FileText },
+    { id: "overview", label: "Platform Overview", icon: LayoutDashboard },
+    { id: "users", label: "User Management", icon: Users },
+    { id: "listings", label: "Energy Listings", icon: ShoppingBag },
+    { id: "requests", label: "Energy Demands", icon: Sliders },
+    { id: "transactions", label: "P2P Transactions", icon: Coins },
+    { id: "algorithms", label: "Research Algorithms", icon: Scale, badge: "Phase 7" },
+    { id: "research", label: "Research Analytics", icon: TrendingUp, badge: "Empirical" },
+    { id: "settings", label: "Platform Settings", icon: Settings },
+    { id: "audit", label: "Activity Logs & Audit", icon: FileText },
   ];
 
   const currentNav = role === "PRODUCER" ? producerNav : role === "CONSUMER" ? consumerNav : adminNav;
