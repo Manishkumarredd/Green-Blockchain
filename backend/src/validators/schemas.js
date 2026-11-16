@@ -45,10 +45,12 @@ const updateListingSchema = z.object({
 
 // 3. Consumer Schemas
 const createRequestSchema = z.object({
+  listingId: z.number().int().positive().optional(),
   requestedEnergyKwh: z.number().positive("Requested energy must be greater than 0"),
   priorityWeight: z.number().min(1.0, "Priority weight must be at least 1.0").default(1.0),
   maxAcceptablePrice: z.number().positive("Max acceptable price must be greater than 0").optional(),
   urgencyLevel: z.enum(["HIGH", "NORMAL", "FLEXIBLE"]).default("NORMAL"),
+  message: z.string().max(500).optional(),
 });
 
 const updateRequestSchema = z.object({

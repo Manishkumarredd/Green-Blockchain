@@ -96,12 +96,15 @@ CREATE INDEX idx_listings_avail ON energy_listings(available_energy_kwh);
 CREATE TABLE energy_requests (
     id SERIAL PRIMARY KEY,
     consumer_id INT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    listing_id INT REFERENCES energy_listings(id) ON DELETE SET NULL,
     requested_energy_kwh NUMERIC(12, 2) NOT NULL CHECK (requested_energy_kwh > 0),
     priority_weight NUMERIC(5, 2) DEFAULT 1.00 CHECK (priority_weight >= 1.0),
     request_status VARCHAR(20) DEFAULT 'PENDING' CHECK (request_status IN ('PENDING', 'MATCHED', 'PARTIALLY_MATCHED', 'FULFILLED', 'CANCELLED', 'REJECTED', 'EXPIRED')),
     max_acceptable_price NUMERIC(16, 8),
     urgency_level VARCHAR(20) DEFAULT 'NORMAL' CHECK (urgency_level IN ('HIGH', 'NORMAL', 'FLEXIBLE')),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    message TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_requests_consumer ON energy_requests(consumer_id);

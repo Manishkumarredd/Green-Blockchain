@@ -12,6 +12,7 @@ export interface PageHeaderProps {
   description?: string;
   breadcrumbs?: BreadcrumbItem[];
   actions?: React.ReactNode;
+  action?: React.ReactNode;
   className?: string;
 }
 
@@ -21,9 +22,11 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   description,
   breadcrumbs,
   actions,
+  action,
   className = "",
 }) => {
   const displaySubtitle = subtitle || description;
+  const displayActions = actions || action;
 
   return (
     <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-8 ${className}`}>
@@ -61,9 +64,9 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
         )}
       </div>
 
-      {actions && (
+      {displayActions && (
         <div className="flex items-center gap-2.5 flex-shrink-0 self-start sm:self-auto">
-          {actions}
+          {displayActions}
         </div>
       )}
     </div>

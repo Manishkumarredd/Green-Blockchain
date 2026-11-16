@@ -10,7 +10,9 @@ export interface ConfirmationDialogProps {
   title: string;
   message: string;
   confirmText?: string;
+  confirmLabel?: string;
   cancelText?: string;
+  cancelLabel?: string;
   type?: "danger" | "warning" | "info" | "success";
   variant?: "danger" | "warning" | "info" | "success";
   isLoading?: boolean;
@@ -24,7 +26,9 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
   title,
   message,
   confirmText = "Confirm",
+  confirmLabel,
   cancelText = "Cancel",
+  cancelLabel,
   type,
   variant,
   isLoading = false,
@@ -32,6 +36,8 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
 }) => {
   const dialogType = type || variant || "warning";
   const activeLoading = isLoading || loading;
+  const resolvedConfirmText = confirmLabel || confirmText;
+  const resolvedCancelText = cancelLabel || cancelText;
 
   const iconConfig = {
     danger: {
@@ -81,7 +87,7 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
             onClick={onClose}
             disabled={activeLoading}
           >
-            {cancelText}
+            {resolvedCancelText}
           </Button>
           <Button
             variant={iconConfig.btnVariant}
@@ -90,7 +96,7 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
             isLoading={activeLoading}
             onClick={onConfirm}
           >
-            {confirmText}
+            {resolvedConfirmText}
           </Button>
         </div>
       </div>

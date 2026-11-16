@@ -141,13 +141,53 @@ export const producersApi = {
 // -----------------------------------------------------------------------------
 export const consumersApi = {
   createRequest: (payload: {
+    listingId?: number;
     requestedEnergyKwh: number;
     priorityWeight?: number;
     maxAcceptablePrice?: number;
     urgencyLevel?: "HIGH" | "NORMAL" | "FLEXIBLE";
+    message?: string;
   }) => request<any>("/consumers/requests", { method: "POST", body: JSON.stringify(payload) }),
 
-  getMyRequests: () => request<any[]>("/consumers/requests", { method: "GET" }),
+  getMyRequests: (params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    source?: string;
+    search?: string;
+    sortBy?: string;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.page) q.set("page", params.page.toString());
+    if (params?.limit) q.set("limit", params.limit.toString());
+    if (params?.status) q.set("status", params.status);
+    if (params?.source) q.set("source", params.source);
+    if (params?.search) q.set("search", params.search);
+    if (params?.sortBy) q.set("sortBy", params.sortBy);
+    return request<any[]>(`/consumers/requests?${q.toString()}`, { method: "GET" });
+  },
+
+  getRequestById: (id: string | number) => request<any>(`/consumers/requests/${id}`, { method: "GET" }),
+
+  cancelRequest: (id: string | number) => request<any>(`/consumers/requests/${id}/cancel`, { method: "PATCH" }),
+
+  getMyPurchases: (params?: {
+    page?: number;
+    limit?: number;
+    source?: string;
+    search?: string;
+    sortBy?: string;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.page) q.set("page", params.page.toString());
+    if (params?.limit) q.set("limit", params.limit.toString());
+    if (params?.source) q.set("source", params.source);
+    if (params?.search) q.set("search", params.search);
+    if (params?.sortBy) q.set("sortBy", params.sortBy);
+    return request<any[]>(`/consumers/purchases?${q.toString()}`, { method: "GET" });
+  },
+
+  getCarbonSavings: () => request<any>("/consumers/carbon-savings", { method: "GET" }),
 
   getMyAllocations: () => request<any[]>("/consumers/allocations", { method: "GET" }),
 

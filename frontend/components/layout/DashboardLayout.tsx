@@ -36,6 +36,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     } else if (role === "CONSUMER") {
       if (navId === "overview") router.push("/consumer/dashboard");
       else if (navId === "marketplace") router.push("/marketplace");
+      else if (navId === "requests") router.push("/consumer/requests");
+      else if (navId === "purchases") router.push("/consumer/purchases");
+      else if (navId === "carbon") router.push("/consumer/dashboard");
     } else if (role === "ADMIN") {
       if (navId === "overview") router.push("/admin/dashboard");
     }

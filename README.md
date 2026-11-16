@@ -6,7 +6,7 @@
 [![Express.js](https://img.shields.io/badge/Express.js-4.21.2-lightgrey?logo=express)](https://expressjs.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16%2B-336791?logo=postgresql)](https://www.postgresql.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests Passing](https://img.shields.io/badge/Tests-35%2F35%20Passing-brightgreen)](backend/src/tests)
+[![Tests Passing](https://img.shields.io/badge/Tests-44%2F44%20Passing-brightgreen)](backend/src/tests)
 
 ---
 
@@ -126,7 +126,41 @@ Phase 5 delivers a complete commercial-grade Producer Portal and public Energy M
 
 ---
 
-## 6. Automated Test Suite
+## 6. Phase 6: Consumer Portal & Energy Purchase Requests
+
+Phase 6 implements a comprehensive Consumer Dashboard, marketplace purchase request integration, demand order tracking, and carbon avoidance analytics:
+
+### Consumer Dashboard (`/consumer/dashboard`)
+- **Key Metrics (KPI Cards)**: Total Energy Purchased (kWh), Total Energy Allocated (kWh), Pending Demands Count, Total Expenditure (₹ and ETH), and Estimated Carbon Savings (kg $\text{CO}_2$).
+- **Recharts Analytics**:
+  - Clean Energy Consumption & Expenditure History (dual-gradient AreaChart: kWh vs. ETH spending).
+  - Demand Request Status Distribution (Donut PieChart: Pending, Matched, Fulfilled, Cancelled).
+- **Environmental Impact Panel**: Avoided carbon emissions calculated against the regional grid baseline (0.8200 kg $\text{CO}_2$/kWh), with live tree equivalents, coal combustion avoided, and passenger car travel offsets.
+- **Recent Demands & Settlements**: Quick-view tables for active purchase requests and completed Sepolia settlements.
+- **Available Offers Quick Preview**: Top active microgrid clean energy offers with direct 1-click order initiation.
+
+### Marketplace Energy Request Workflow (`/marketplace/[id]`)
+- **Consumer Purchase Demand Modal**:
+  - Displays producer name, smart meter ID, renewable source, available capacity, and unit tariff.
+  - Form inputs: requested volume (kWh), priority weight tier (1.0x Standard, 1.5x Commercial, 2.0x Critical), urgency level, max acceptable price, and optional producer note.
+  - Concurrency & validation guards: rejects $\le 0$, quantities exceeding available capacity, and blocks producers from requesting energy.
+  - Automatically submits to double-auction matching queue and routes to demand details page.
+
+### Consumer Demands Management (`/consumer/requests`, `/consumer/requests/[id]`)
+- **Demands Directory (`/consumer/requests`)**: Searchable, filterable (status & source), and sortable table with status badges and cancellation dialog.
+- **Demand Details View (`/consumer/requests/[id]`)**:
+  - Full specifications and linked producer profile.
+  - **Fairness-Aware Allocation Interface (Phase 7 Ready)**: Visual fulfillment percentage bar, algorithm designation, and transparent status messaging.
+  - **Lifecycle Timeline**: Tracks submission, algorithmic allocation, and on-chain settlement stages.
+  - Safe cancellation for eligible `PENDING` demands.
+
+### Settled Purchases History (`/consumer/purchases`)
+- Itemized directory of confirmed peer-to-peer energy transactions.
+- Detailed modal receipt displaying total ETH & INR amounts, avoided carbon, and verified Ethereum Sepolia transaction hash with 1-click Etherscan link.
+
+---
+
+## 7. Automated Test Suite
 
 Run all automated unit and integration tests:
 
@@ -134,21 +168,25 @@ Run all automated unit and integration tests:
 npm --prefix backend test
 ```
 
-**Results: 35 passing tests in <700ms**, covering:
+**Results: 44 passing tests in <800ms**, covering:
 - PostgreSQL dual-mode connectivity and health
 - User registration, login, bcrypt hashing, and JWT verification
 - Role authorization guards (`PRODUCER`, `CONSUMER`, `ADMIN`)
 - Producer listing creation, updates, and deletion guards
-- Consumer demand requests and allocation queries
+- Consumer purchase request submission and capacity validation
+- Rejection of negative/zero requests and requests exceeding available capacity
+- Rejection of producer self-purchasing and role restrictions
+- Security isolation ensuring consumers cannot access another consumer's private requests
+- Cancellation of eligible `PENDING` requests and rejection of invalid state cancellations
+- Exclusion of cancelled demands from completed purchase history
+- Consumer dashboard analytics and Recharts series calculations
+- Standard 0.82 kg $\text{CO}_2$/kWh carbon savings and environmental indicator formulas
 - Marketplace search, energy source filters, price ranges, and pagination
-- Zod schema rejection of negative energy quantities and zero prices
-- Transaction settlement calculations, total amount, and carbon offsets
 - Concurrency control and overselling prevention
-- Administrative privilege restrictions
 
 ---
 
-## 7. How to Run Locally
+## 8. How to Run Locally
 
 ### Start Backend API Server:
 ```bash

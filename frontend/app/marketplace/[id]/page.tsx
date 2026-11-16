@@ -20,6 +20,9 @@ import {
   Activity,
   Calculator,
   ShoppingBag,
+  Sliders,
+  Send,
+  MessageSquare,
 } from "lucide-react";
 import { PublicLayout } from "../../../components/layout/PublicLayout";
 import { Card } from "../../../components/ui/Card";
@@ -31,7 +34,7 @@ import { SkeletonCard } from "../../../components/ui/LoadingSkeleton";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorState } from "../../../components/ui/ErrorState";
 import { useApp } from "../../../components/common/AppContext";
-import { marketplaceApi, transactionsApi } from "../../../services/api";
+import { marketplaceApi, consumersApi, transactionsApi } from "../../../services/api";
 
 export default function MarketplaceListingDetailsPage({
   params,
@@ -47,13 +50,16 @@ export default function MarketplaceListingDetailsPage({
   const [error, setError] = useState<string | null>(null);
   const [listing, setListing] = useState<any>(null);
 
-  // Purchase Estimator State
+  // Purchase Request Form State
   const [orderQuantityKwh, setOrderQuantityKwh] = useState("50");
+  const [priorityWeight, setPriorityWeight] = useState("1.0");
+  const [urgencyLevel, setUrgencyLevel] = useState<"HIGH" | "NORMAL" | "FLEXIBLE">("NORMAL");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [consumerMessage, setConsumerMessage] = useState("");
 
-  // Purchase Modal State
-  const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
-  const [isPurchasing, setIsPurchasing] = useState(false);
-  const [completedTx, setCompletedTx] = useState<any>(null);
+  // Request Modal State
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
 
   const fetchListing = useCallback(async () => {
     try {
@@ -66,6 +72,7 @@ export default function MarketplaceListingDetailsPage({
         const avail = Number(res.data.available_energy_kwh || res.data.available_kwh);
         const initialOrder = Math.min(avail, Math.max(minVal, 50));
         setOrderQuantityKwh(String(initialOrder));
+        setMaxPrice(String(res.data.price_per_kwh || res.data.unit_price_eth));
       } else {
         setError(res.error || "Failed to load energy listing details");
       }
@@ -80,14 +87,14 @@ export default function MarketplaceListingDetailsPage({
     fetchListing();
   }, [fetchListing]);
 
-  // Handle Request/Buy Trigger
+  // Handle Request Energy Button Click
   const handleInitiateRequest = () => {
     const token = typeof window !== "undefined" ? localStorage.getItem("greenledger_auth_token") : null;
     if (!token) {
       addToast({
         type: "warning",
         title: "Sign In Required",
-        message: "Please log in with a Consumer account to purchase renewable energy.",
+        message: "Please log in with a Consumer account to submit an energy purchase demand.",
       });
       router.push(`/login?redirect=/marketplace/${listingId}`);
       return;
@@ -97,49 +104,81 @@ export default function MarketplaceListingDetailsPage({
       addToast({
         type: "warning",
         title: "Producer Role Restricted",
-        message: "Producers cannot buy energy listings. Switch to a Consumer account to participate in purchasing.",
+        message: "Producers cannot buy or request energy listings. Switch to a Consumer account to participate.",
       });
       return;
     }
 
-    setIsPurchaseModalOpen(true);
+    setIsRequestModalOpen(true);
   };
 
-  // Execute Energy Purchase Settlement
-  const handleConfirmPurchase = async () => {
+  // Submit Energy Purchase Request
+  const handleSubmitRequest = async () => {
     const qty = parseFloat(orderQuantityKwh);
-    if (!qty || qty <= 0) return;
+    const avail = Number(listing?.available_energy_kwh || listing?.available_kwh || 0);
+    const minVal = Number(listing?.min_purchase_kwh || 1.0);
+
+    if (isNaN(qty) || qty <= 0) {
+      addToast({
+        type: "error",
+        title: "Invalid Quantity",
+        message: "Requested energy quantity must be greater than zero.",
+      });
+      return;
+    }
+
+    if (qty > avail) {
+      addToast({
+        type: "error",
+        title: "Capacity Exceeded",
+        message: `Requested quantity (${qty} kWh) exceeds available capacity (${avail} kWh).`,
+      });
+      return;
+    }
+
+    if (qty < minVal) {
+      addToast({
+        type: "error",
+        title: "Minimum Purchase Required",
+        message: `Minimum order for this listing is ${minVal} kWh.`,
+      });
+      return;
+    }
 
     try {
-      setIsPurchasing(true);
-      const res = await transactionsApi.createTransaction({
+      setIsSubmittingRequest(true);
+      const res = await consumersApi.createRequest({
         listingId: Number(listingId),
-        energyQuantityKwh: qty,
+        requestedEnergyKwh: qty,
+        priorityWeight: parseFloat(priorityWeight) || 1.0,
+        maxAcceptablePrice: maxPrice ? parseFloat(maxPrice) : undefined,
+        urgencyLevel: urgencyLevel,
+        message: consumerMessage.trim() || undefined,
       });
 
       if (res.success && res.data) {
-        setCompletedTx(res.data);
         addToast({
           type: "success",
-          title: "Energy Purchase Settled",
-          message: `Successfully purchased ${qty} kWh from Listing #${listingId}.`,
+          title: "Demand Request Submitted",
+          message: `Your energy request for ${qty} kWh has been submitted to the double-auction matching engine.`,
         });
-        fetchListing();
+        setIsRequestModalOpen(false);
+        router.push(`/consumer/requests/${res.data.id}`);
       } else {
         addToast({
           type: "error",
-          title: "Settlement Failed",
-          message: res.error || "Could not complete transaction settlement",
+          title: "Request Submission Failed",
+          message: res.error || "Could not submit energy request",
         });
       }
     } catch (err: any) {
       addToast({
         type: "error",
-        title: "Transaction Error",
-        message: err.message || "An error occurred during trade execution",
+        title: "Submission Error",
+        message: err.message || "An unexpected error occurred while submitting request",
       });
     } finally {
-      setIsPurchasing(false);
+      setIsSubmittingRequest(false);
     }
   };
 
@@ -163,12 +202,19 @@ export default function MarketplaceListingDetailsPage({
   if (error || !listing) {
     return (
       <PublicLayout>
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-16 text-center">
+        <div className="max-w-3xl mx-auto px-4 py-16 text-center">
           <ErrorState
-            title="Energy Listing Unavailable"
-            message={error || `Could not find marketplace listing #${listingId}`}
+            title="Listing Not Found"
+            message={error || "The energy listing you are looking for does not exist or has expired."}
             onRetry={fetchListing}
           />
+          <div className="mt-6">
+            <Link href="/marketplace">
+              <Button variant="outline" icon={ArrowLeft}>
+                Back to Energy Marketplace
+              </Button>
+            </Link>
+          </div>
         </div>
       </PublicLayout>
     );
@@ -178,344 +224,375 @@ export default function MarketplaceListingDetailsPage({
   const availKwh = Number(listing.available_energy_kwh || listing.available_kwh);
   const totalKwh = Number(listing.total_energy_kwh || listing.quantity_kwh || availKwh);
   const minPurchase = Number(listing.min_purchase_kwh || 1.0);
+  const orderQtyNum = parseFloat(orderQuantityKwh) || 0;
 
-  // Estimator Math
-  const orderQtyNum = Math.min(availKwh, Math.max(minPurchase, parseFloat(orderQuantityKwh) || minPurchase));
-  const baseEth = orderQtyNum * priceNum;
-  const feeEth = baseEth * 0.015; // 1.5% commission
-  const totalEth = (baseEth + feeEth).toFixed(6);
-  const carbonSavedKg = (orderQtyNum * 0.82).toFixed(1);
+  // Cost Estimations
+  const baseCost = orderQtyNum * priceNum;
+  const platformFee = baseCost * 0.015; // 1.5%
+  const totalEth = (baseCost + platformFee).toFixed(8);
+  const totalInr = ((baseCost + platformFee) * 280000).toFixed(2);
+  const avoidedCo2 = (orderQtyNum * 0.82).toFixed(2);
+
+  const getSourceIcon = (source: string) => {
+    switch ((source || "").toUpperCase()) {
+      case "SOLAR":
+        return Sun;
+      case "WIND":
+        return Wind;
+      case "HYDRO":
+        return Droplets;
+      case "BIOMASS":
+        return Flame;
+      default:
+        return Zap;
+    }
+  };
+
+  const SourceIcon = getSourceIcon(listing.energy_source);
 
   return (
     <PublicLayout>
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8 animate-fadeIn">
         {/* Navigation Breadcrumb */}
         <div className="flex items-center justify-between">
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={ArrowLeft}
-            onClick={() => router.push("/marketplace")}
+          <Link
+            href="/marketplace"
+            className="inline-flex items-center gap-2 text-xs font-bold text-navy-500 hover:text-navy-900 dark:hover:text-white transition"
           >
-            Back to Marketplace
-          </Button>
-
+            <ArrowLeft className="w-4 h-4" /> Back to Energy Marketplace
+          </Link>
           <div className="flex items-center gap-2">
             <span className="text-xs text-navy-400">Listing Status:</span>
-            <StatusBadge status={listing.listing_status || "ACTIVE"} size="sm" />
+            <StatusBadge status={listing.listing_status || "ACTIVE"} variant="success" />
           </div>
         </div>
 
-        {/* Main Grid: Details + Cost Estimator */}
+        {/* Listing Header Hero */}
+        <div className="bg-white dark:bg-navy-900 rounded-3xl p-6 sm:p-8 border border-navy-200 dark:border-navy-800 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex items-start gap-4">
+            <div className="p-4 rounded-2xl bg-brand-50 dark:bg-brand-950/60 text-brand-600 dark:text-brand-400 border border-brand-200/50 flex-shrink-0">
+              <SourceIcon className="w-8 h-8" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-brand-50 text-brand-700 dark:bg-brand-950/60 dark:text-brand-300 border border-brand-200/60">
+                  {listing.energy_source} Generation
+                </span>
+                <span className="font-mono text-xs font-semibold text-navy-400">
+                  Listing #{listing.id}
+                </span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-black text-navy-900 dark:text-white mt-1 tracking-tight">
+                {listing.producer_name || "Green Energy Producer"}
+              </h1>
+              <p className="text-xs text-navy-500 dark:text-navy-400 mt-1 flex items-center gap-3">
+                <span>Node: {listing.location_grid || "Alpha Microgrid Cluster 1"}</span>
+                <span>•</span>
+                <span className="font-mono">Smart Meter: {listing.producer_meter_id || "METER-PROD-101"}</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row md:flex-col items-start md:items-end justify-between border-t md:border-t-0 pt-4 md:pt-0 border-navy-100 dark:border-navy-800">
+            <p className="text-xs uppercase font-bold text-navy-400">Spot Tariff Rate</p>
+            <p className="text-3xl font-black text-navy-900 dark:text-white font-mono mt-0.5">
+              {priceNum.toFixed(8)} <span className="text-sm font-semibold text-navy-500">ETH/kWh</span>
+            </p>
+            <p className="text-xs text-brand-600 dark:text-brand-400 font-semibold mt-0.5">
+              ≈ ₹{(priceNum * 280000).toFixed(2)} per kWh
+            </p>
+          </div>
+        </div>
+
+        {/* Technical Specifications & Purchase Calculator Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column: Full Specifications */}
+          {/* Left Column: Technical Specifications */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Header Card */}
-            <Card className="p-6 space-y-4">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <StatusBadge status={listing.energy_source} size="sm" />
-                    <span className="text-xs font-mono font-bold text-navy-400">
-                      Listing #{listing.id}
-                    </span>
-                  </div>
-                  <h1 className="text-2xl font-extrabold text-navy-900 dark:text-white">
-                    {listing.energy_source} Renewable Energy Capacity
-                  </h1>
-                  <p className="text-xs text-navy-500 dark:text-navy-400 mt-1">
-                    Certified clean generation delivered across Microgrid Sector {listing.location_grid || "Alpha-1"}
-                  </p>
-                </div>
-
-                <div className="text-right">
-                  <p className="text-[11px] font-bold uppercase text-navy-400">Unit Price</p>
-                  <p className="font-mono text-2xl font-black text-brand-600 dark:text-brand-400">
-                    {priceNum} <span className="text-xs font-bold">ETH/kWh</span>
-                  </p>
-                </div>
-              </div>
-
-              {/* Producer Credibility Banner */}
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-navy-950/60 border border-navy-100 dark:border-navy-800/80 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center font-bold">
-                    {listing.producer_name?.slice(0, 2).toUpperCase() || "GL"}
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-navy-900 dark:text-white">
-                      {listing.producer_name}
-                    </p>
-                    <p className="font-mono text-xs text-navy-400">
-                      Smart Meter: {listing.producer_meter_id || "METER-PROD-SOL-101"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4 text-xs font-semibold">
-                  <div className="flex items-center gap-1 text-brand-600 dark:text-brand-400">
-                    <ShieldCheck className="w-4 h-4" />
-                    <span>{listing.reputation_score || 99.2}% Proven Track Record</span>
-                  </div>
-                  {listing.producer_wallet && (
-                    <div className="font-mono text-navy-500 text-[11px]">
-                      {listing.producer_wallet.slice(0, 6)}...{listing.producer_wallet.slice(-4)}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </Card>
-
-            {/* Technical Specifications */}
-            <Card className="p-6 space-y-4">
-              <h3 className="font-bold text-base text-navy-900 dark:text-white flex items-center gap-2">
-                <Activity className="w-4 h-4 text-brand-600" />
-                Technical & Orderbook Specifications
+            <Card className="p-6">
+              <h3 className="text-base font-bold text-navy-900 dark:text-white mb-4 flex items-center gap-2">
+                <Layers className="w-4 h-4 text-brand-600" />
+                Technical Capacity & Availability
               </h3>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-navy-950/40 border border-navy-100 dark:border-navy-800">
-                  <p className="text-navy-400 font-medium">Total Generation</p>
-                  <p className="text-sm font-bold text-navy-900 dark:text-white mt-0.5">
-                    {totalKwh.toLocaleString()} kWh
-                  </p>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-semibold text-navy-600 dark:text-navy-300">
+                    Available Capacity:
+                  </span>
+                  <span className="font-mono font-bold text-navy-900 dark:text-white">
+                    {availKwh.toLocaleString()} kWh of {totalKwh.toLocaleString()} kWh total
+                  </span>
                 </div>
-
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-navy-950/40 border border-navy-100 dark:border-navy-800">
-                  <p className="text-navy-400 font-medium">Available in Escrow</p>
-                  <p className="text-sm font-bold text-brand-600 dark:text-brand-400 mt-0.5">
-                    {availKwh.toLocaleString()} kWh
-                  </p>
+                <div className="h-3 w-full bg-navy-100 dark:bg-navy-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-brand-500 to-emerald-400 rounded-full"
+                    style={{ width: `${Math.min(100, (availKwh / (totalKwh || 1)) * 100)}%` }}
+                  />
                 </div>
+              </div>
 
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-navy-950/40 border border-navy-100 dark:border-navy-800">
-                  <p className="text-navy-400 font-medium">Min Order Size</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-6 mt-6 border-t border-navy-100 dark:border-navy-800 text-xs">
+                <div>
+                  <p className="text-navy-400 font-bold uppercase text-[10px]">Min Purchase</p>
                   <p className="text-sm font-bold text-navy-900 dark:text-white mt-0.5">
                     {minPurchase} kWh
                   </p>
                 </div>
-
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-navy-950/40 border border-navy-100 dark:border-navy-800">
-                  <p className="text-navy-400 font-medium">Settlement Layer</p>
+                <div>
+                  <p className="text-navy-400 font-bold uppercase text-[10px]">Settlement Method</p>
                   <p className="text-sm font-bold text-navy-900 dark:text-white mt-0.5">
-                    Ethereum Sepolia
+                    Atomic On-Chain Escrow
                   </p>
                 </div>
-
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-navy-950/40 border border-navy-100 dark:border-navy-800">
-                  <p className="text-navy-400 font-medium">REC Token Eligible</p>
+                <div>
+                  <p className="text-navy-400 font-bold uppercase text-[10px]">Certificate</p>
                   <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
-                    ERC-721 G-REC
-                  </p>
-                </div>
-
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-navy-950/40 border border-navy-100 dark:border-navy-800">
-                  <p className="text-navy-400 font-medium">Avoided Factor</p>
-                  <p className="text-sm font-bold text-navy-900 dark:text-white mt-0.5">
-                    0.82 kg CO2/kWh
+                    ERC-721 REC Included
                   </p>
                 </div>
               </div>
             </Card>
+
+            <Card className="p-6 bg-gradient-to-br from-brand-900/10 via-transparent to-transparent border-brand-500/20">
+              <h3 className="text-base font-bold text-navy-900 dark:text-white mb-2 flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-brand-600" />
+                Guaranteed Renewable Provenance
+              </h3>
+              <p className="text-xs text-navy-600 dark:text-navy-300 leading-relaxed">
+                Energy generated by this producer is verified through calibrated smart meters and algorithmically audited against deterministic physical simulation models (solar irradiance and wind power curves). Every transaction results in minting a cryptographic Renewable Energy Certificate (REC).
+              </p>
+            </Card>
           </div>
 
-          {/* Right Column: Interactive Purchase Cost Estimator & Order CTA */}
+          {/* Right Column: Interactive Purchase Estimator */}
           <div className="space-y-6">
-            <Card className="p-6 border-brand-500/40 shadow-xl space-y-6 bg-white dark:bg-navy-900">
-              <div className="flex items-center gap-2 pb-3 border-b border-navy-100 dark:border-navy-800">
-                <Calculator className="w-5 h-5 text-brand-600 dark:text-brand-400" />
-                <h3 className="font-extrabold text-base text-navy-900 dark:text-white">
-                  Order Cost Estimator
+            <Card className="p-6 space-y-6 border-brand-500/40 shadow-lg">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-navy-900 dark:text-white flex items-center gap-2">
+                  <Calculator className="w-5 h-5 text-brand-600" />
+                  Order Estimator
                 </h3>
+                <span className="text-xs font-bold text-brand-600 bg-brand-50 dark:bg-brand-950/60 px-2 py-0.5 rounded-full">
+                  Real-time
+                </span>
               </div>
 
-              {/* Order Volume Input */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center text-xs font-bold text-navy-800 dark:text-navy-200">
-                  <span>Energy Quantity (kWh)</span>
-                  <span className="text-brand-600 dark:text-brand-400">{availKwh} kWh max</span>
+              {/* Quantity Slider & Input */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center text-xs">
+                  <label className="font-bold text-navy-700 dark:text-navy-200">
+                    Energy Volume (kWh):
+                  </label>
+                  <span className="font-mono font-bold text-brand-600">
+                    {orderQuantityKwh} kWh
+                  </span>
                 </div>
-
-                <Input
-                  type="number"
-                  step="1"
-                  min={minPurchase}
-                  max={availKwh}
-                  value={orderQuantityKwh}
-                  onChange={(e) => setOrderQuantityKwh(e.target.value)}
-                  className="h-11 font-bold text-base"
-                />
-
-                {/* Slider for quick picking */}
                 <input
                   type="range"
                   min={minPurchase}
                   max={availKwh}
-                  step="1"
-                  value={orderQtyNum}
+                  step={1}
+                  value={orderQuantityKwh}
                   onChange={(e) => setOrderQuantityKwh(e.target.value)}
                   className="w-full accent-brand-600 cursor-pointer"
+                />
+                <Input
+                  type="number"
+                  min={minPurchase}
+                  max={availKwh}
+                  value={orderQuantityKwh}
+                  onChange={(e) => setOrderQuantityKwh(e.target.value)}
+                  helperText={`Min purchase: ${minPurchase} kWh | Max available: ${availKwh} kWh`}
                 />
               </div>
 
               {/* Itemized Cost Breakdown */}
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-navy-950/80 border border-navy-100 dark:border-navy-800 space-y-2.5 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-navy-500 dark:text-navy-400">
-                    Energy Base ({orderQtyNum} kWh × {priceNum}):
-                  </span>
-                  <span className="font-mono font-semibold text-navy-900 dark:text-white">
-                    {baseEth.toFixed(6)} ETH
+              <div className="p-4 bg-navy-50/60 dark:bg-navy-800/40 rounded-2xl border border-navy-100 dark:border-navy-700/60 space-y-2.5 text-xs">
+                <div className="flex justify-between text-navy-600 dark:text-navy-300">
+                  <span>Base Energy Cost ({orderQtyNum} kWh):</span>
+                  <span className="font-mono font-bold text-navy-900 dark:text-white">
+                    {baseCost.toFixed(8)} ETH
                   </span>
                 </div>
-
-                <div className="flex justify-between">
-                  <span className="text-navy-500 dark:text-navy-400">
-                    Platform Commission (1.5%):
-                  </span>
-                  <span className="font-mono font-semibold text-navy-900 dark:text-white">
-                    {feeEth.toFixed(6)} ETH
+                <div className="flex justify-between text-navy-600 dark:text-navy-300">
+                  <span>Microgrid Commission (1.5%):</span>
+                  <span className="font-mono text-navy-500">
+                    {platformFee.toFixed(8)} ETH
                   </span>
                 </div>
-
-                <div className="flex justify-between py-1 border-t border-navy-200/50 dark:border-navy-800">
-                  <span className="text-navy-500 dark:text-navy-400">
-                    CO2 Greenhouse Avoided:
-                  </span>
-                  <span className="font-bold text-brand-600 dark:text-brand-400">
-                    {carbonSavedKg} kg CO2
+                <div className="flex justify-between text-navy-600 dark:text-navy-300 pt-2 border-t border-navy-200/60 dark:border-navy-700/60">
+                  <span className="font-bold">Avoided CO₂:</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                    {avoidedCo2} kg
                   </span>
                 </div>
-
-                <div className="flex justify-between pt-2 border-t border-navy-200 dark:border-navy-700 text-sm">
-                  <span className="font-extrabold text-navy-900 dark:text-white">
-                    Total Estimated Amount:
-                  </span>
-                  <span className="font-mono font-black text-brand-700 dark:text-brand-300">
-                    {totalEth} ETH
-                  </span>
+                <div className="flex justify-between items-baseline pt-2 border-t border-navy-200/60 dark:border-navy-700/60">
+                  <span className="text-sm font-extrabold text-navy-900 dark:text-white">Total Amount:</span>
+                  <div className="text-right">
+                    <span className="text-base font-black text-brand-600 dark:text-brand-400 font-mono">
+                      {totalEth} ETH
+                    </span>
+                    <p className="text-[10px] text-navy-400">≈ ₹{Number(totalInr).toLocaleString()}</p>
+                  </div>
                 </div>
               </div>
 
-              {/* Request / Buy CTA */}
+              {/* Action Button */}
               <Button
                 variant="primary"
                 size="lg"
-                className="w-full h-12 text-sm font-bold shadow-md shadow-brand-500/20"
-                icon={ShoppingBag}
+                className="w-full text-sm font-bold shadow-md shadow-brand-600/20"
                 onClick={handleInitiateRequest}
-                disabled={availKwh <= 0}
+                leftIcon={<ShoppingBag className="w-4 h-4" />}
               >
-                {availKwh <= 0 ? "Listing Capacity Sold Out" : "Request Energy Allocation"}
+                Request Energy Demand
               </Button>
-
-              <p className="text-[11px] text-center text-navy-400 leading-tight">
-                Non-custodial smart escrow guarantees atomic energy delivery and ERC-721 certificate issuance upon settlement.
-              </p>
             </Card>
           </div>
         </div>
 
-        {/* Modal: Purchase Confirmation & Settlement */}
-        {isPurchaseModalOpen && (
+        {/* Request Energy Modal Form */}
+        {isRequestModalOpen && (
           <Modal
             isOpen={true}
-            onClose={() => {
-              setIsPurchaseModalOpen(false);
-              setCompletedTx(null);
-            }}
-            title={completedTx ? "Settlement Receipt" : "Confirm Energy Request"}
+            onClose={() => setIsRequestModalOpen(false)}
+            title="Submit Energy Purchase Demand"
+            size="lg"
           >
-            {completedTx ? (
-              <div className="space-y-4 pt-2 text-center">
-                <div className="w-14 h-14 rounded-full bg-brand-100 dark:bg-brand-950/60 text-brand-600 mx-auto flex items-center justify-center">
-                  <CheckCircle2 className="w-8 h-8" />
+            <div className="space-y-6 pt-2">
+              <p className="text-xs text-navy-600 dark:text-navy-300 leading-relaxed">
+                Submit a purchase request to the double-auction matching engine for <strong>{listing.producer_name}</strong> ({listing.energy_source}). Your request will be queued for algorithmic proportional allocation.
+              </p>
+
+              {/* Listing Summary Pill */}
+              <div className="p-4 rounded-2xl bg-navy-50 dark:bg-navy-950 text-xs grid grid-cols-2 sm:grid-cols-4 gap-3 border border-navy-100 dark:border-navy-800">
+                <div>
+                  <span className="text-navy-400 uppercase font-bold text-[10px]">Source</span>
+                  <p className="font-bold text-navy-900 dark:text-white mt-0.5">{listing.energy_source}</p>
+                </div>
+                <div>
+                  <span className="text-navy-400 uppercase font-bold text-[10px]">Available</span>
+                  <p className="font-bold text-navy-900 dark:text-white mt-0.5">{availKwh} kWh</p>
+                </div>
+                <div>
+                  <span className="text-navy-400 uppercase font-bold text-[10px]">Unit Price</span>
+                  <p className="font-mono font-bold text-navy-900 dark:text-white mt-0.5">{priceNum} ETH</p>
+                </div>
+                <div>
+                  <span className="text-navy-400 uppercase font-bold text-[10px]">Avoided CO₂</span>
+                  <p className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">{avoidedCo2} kg</p>
+                </div>
+              </div>
+
+              {/* Form Controls */}
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-navy-700 dark:text-navy-200 block mb-1">
+                    Requested Energy Volume (kWh) *
+                  </label>
+                  <Input
+                    type="number"
+                    min={minPurchase}
+                    max={availKwh}
+                    value={orderQuantityKwh}
+                    onChange={(e) => setOrderQuantityKwh(e.target.value)}
+                    helperText={`Must be between ${minPurchase} kWh and ${availKwh} kWh`}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-navy-700 dark:text-navy-200 block mb-1">
+                      Priority Tier Weight
+                    </label>
+                    <select
+                      value={priorityWeight}
+                      onChange={(e) => setPriorityWeight(e.target.value)}
+                      className="w-full px-3 py-2 text-xs font-semibold bg-white dark:bg-navy-900 border border-navy-200 dark:border-navy-700 rounded-xl text-navy-800 dark:text-navy-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+                    >
+                      <option value="1.0">Standard Priority (1.0x)</option>
+                      <option value="1.5">Commercial Priority (1.5x)</option>
+                      <option value="2.0">Critical Infrastructure (2.0x)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-navy-700 dark:text-navy-200 block mb-1">
+                      Urgency Level
+                    </label>
+                    <select
+                      value={urgencyLevel}
+                      onChange={(e) => setUrgencyLevel(e.target.value as any)}
+                      className="w-full px-3 py-2 text-xs font-semibold bg-white dark:bg-navy-900 border border-navy-200 dark:border-navy-700 rounded-xl text-navy-800 dark:text-navy-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+                    >
+                      <option value="NORMAL">Normal</option>
+                      <option value="HIGH">High (Immediate Clearing)</option>
+                      <option value="FLEXIBLE">Flexible (Cost Optimized)</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-extrabold text-navy-900 dark:text-white">
-                    Trade Confirmed & Settled
-                  </h3>
-                  <p className="text-xs text-navy-500 mt-1">
-                    Your renewable energy purchase has been processed and logged on the peer-to-peer ledger.
+                  <label className="text-xs font-bold text-navy-700 dark:text-navy-200 block mb-1">
+                    Maximum Acceptable Price (ETH / kWh)
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.00000001"
+                    value={maxPrice}
+                    onChange={(e) => setMaxPrice(e.target.value)}
+                    helperText="Pre-filled with producer tariff. Set upper limit to prevent dynamic price swings."
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-navy-700 dark:text-navy-200 block mb-1">
+                    Optional Message to Producer
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={consumerMessage}
+                    onChange={(e) => setConsumerMessage(e.target.value)}
+                    placeholder="e.g., Hospital backup reserve, night shift load requirements..."
+                    className="w-full px-3.5 py-2 text-xs bg-white dark:bg-navy-900 border border-navy-200 dark:border-navy-700 rounded-xl text-navy-800 dark:text-navy-200 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+                  />
+                </div>
+              </div>
+
+              {/* Total Estimated Commitment */}
+              <div className="p-4 rounded-xl bg-brand-50/60 dark:bg-brand-950/40 border border-brand-200/60 dark:border-brand-800/40 flex justify-between items-center text-xs">
+                <div>
+                  <p className="text-brand-800 dark:text-brand-200 font-bold">Estimated Total Order</p>
+                  <p className="text-[11px] text-brand-600 dark:text-brand-400">Includes 1.5% microgrid fee</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-base font-extrabold text-brand-700 dark:text-brand-300 font-mono">
+                    {totalEth} ETH
                   </p>
+                  <p className="text-[10px] text-navy-400">≈ ₹{Number(totalInr).toLocaleString()}</p>
                 </div>
+              </div>
 
-                <div className="p-4 rounded-xl bg-slate-50 dark:bg-navy-950 text-left text-xs space-y-2 border border-navy-100 dark:border-navy-800">
-                  <div className="flex justify-between">
-                    <span className="text-navy-400">Transaction ID:</span>
-                    <span className="font-mono font-bold text-navy-900 dark:text-white">TX-#{completedTx.id}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-navy-400">Allocated Volume:</span>
-                    <span className="font-bold text-navy-900 dark:text-white">{completedTx.energy_quantity_kwh} kWh</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-navy-400">Total Settlement:</span>
-                    <span className="font-mono font-bold text-brand-600">{completedTx.total_amount} ETH</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-navy-400">Carbon Offset:</span>
-                    <span className="font-bold text-emerald-600">{completedTx.carbonSavedKg} kg CO2</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-navy-400">Status:</span>
-                    <StatusBadge status="CONFIRMED" size="sm" />
-                  </div>
-                </div>
-
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3 pt-3 border-t border-navy-100 dark:border-navy-800">
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={() => setIsRequestModalOpen(false)}
+                  disabled={isSubmittingRequest}
+                >
+                  Cancel
+                </Button>
                 <Button
                   variant="primary"
-                  className="w-full"
-                  onClick={() => {
-                    setIsPurchaseModalOpen(false);
-                    setCompletedTx(null);
-                    router.push("/consumer/dashboard");
-                  }}
+                  loading={isSubmittingRequest}
+                  onClick={handleSubmitRequest}
+                  rightIcon={<Send className="w-4 h-4" />}
                 >
-                  Go to Consumer Dashboard
+                  Submit Demand Request
                 </Button>
               </div>
-            ) : (
-              <div className="space-y-4 pt-2">
-                <p className="text-xs text-navy-600 dark:text-navy-300">
-                  You are about to execute an energy trade with <strong>{listing.producer_name}</strong> for:
-                </p>
-
-                <div className="p-4 rounded-xl bg-slate-50 dark:bg-navy-950 text-xs space-y-2 border border-navy-100 dark:border-navy-800">
-                  <div className="flex justify-between">
-                    <span className="text-navy-400">Energy Volume:</span>
-                    <span className="font-bold text-navy-900 dark:text-white">{orderQtyNum} kWh</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-navy-400">Unit Price:</span>
-                    <span className="font-mono font-bold text-navy-900 dark:text-white">{priceNum} ETH/kWh</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-navy-400">Total Commitment:</span>
-                    <span className="font-mono font-black text-brand-600">{totalEth} ETH</span>
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-2 pt-4 border-t border-navy-100 dark:border-navy-800">
-                  <Button
-                    variant="secondary"
-                    type="button"
-                    onClick={() => setIsPurchaseModalOpen(false)}
-                    disabled={isPurchasing}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="primary"
-                    loading={isPurchasing}
-                    onClick={handleConfirmPurchase}
-                  >
-                    Confirm & Settle Trade
-                  </Button>
-                </div>
-              </div>
-            )}
+            </div>
           </Modal>
         )}
       </div>

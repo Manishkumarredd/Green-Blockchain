@@ -2,9 +2,11 @@ import React from "react";
 import { Pagination, PaginationProps } from "./Pagination";
 
 export interface Column<T> {
-  key: string;
+  key?: string;
+  accessor?: string;
   header: string;
   render?: (row: T, index: number) => React.ReactNode;
+  cell?: (row: T, index: number) => React.ReactNode;
   align?: "left" | "center" | "right";
   width?: string;
 }
@@ -60,8 +62,8 @@ export function DataTable<T extends Record<string, any>>({
             {isLoading ? (
               Array.from({ length: 4 }).map((_, rIdx) => (
                 <tr key={`loading-row-${rIdx}`} className="animate-pulse">
-                  {columns.map((col) => (
-                    <td key={`loading-col-${col.key}`} className="py-4 px-4">
+                  {columns.map((col, cIdx) => (
+                    <td key={`loading-col-${col.key || col.accessor || cIdx}`} className="py-4 px-4">
                       <div className="h-4 bg-navy-200 dark:bg-navy-800 rounded w-3/4"></div>
                     </td>
                   ))}
@@ -89,16 +91,25 @@ export function DataTable<T extends Record<string, any>>({
                         : "hover:bg-slate-50/50 dark:hover:bg-navy-800/30"
                     }`}
                   >
-                    {columns.map((col) => (
-                      <td
-                        key={`cell-${rowKey}-${col.key}`}
-                        className={`py-3.5 px-4 text-navy-800 dark:text-navy-200 ${
-                          alignClass[col.align || "left"]
-                        }`}
-                      >
-                        {col.render ? col.render(row, rowIdx) : row[col.key]}
-                      </td>
-                    ))}
+                    {columns.map((col, cIdx) => {
+                      const colKey = col.key || col.accessor || `col-${cIdx}`;
+                      const cellContent = col.cell
+                        ? col.cell(row, rowIdx)
+                        : col.render
+                        ? col.render(row, rowIdx)
+                        : row[colKey];
+
+                      return (
+                        <td
+                          key={`cell-${rowKey}-${colKey}`}
+                          className={`py-3.5 px-4 text-navy-800 dark:text-navy-200 ${
+                            alignClass[col.align || "left"]
+                          }`}
+                        >
+                          {cellContent}
+                        </td>
+                      );
+                    })}
                   </tr>
                 );
               })

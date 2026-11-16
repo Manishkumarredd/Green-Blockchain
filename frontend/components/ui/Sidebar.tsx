@@ -47,10 +47,10 @@ export const Sidebar: React.FC<{ activeNavId?: string; onNavSelect?: (id: string
 
   const consumerNav: NavItem[] = [
     { id: "overview", label: "Consumer Hub", icon: LayoutDashboard },
-    { id: "marketplace", label: "Clean Energy Market", icon: ShoppingBag, badge: "550 kWh" },
-    { id: "allocations", label: "Demands & Allocations", icon: Sliders },
-    { id: "certificates", label: "My REC Certificates", icon: Award, badge: 12 },
-    { id: "carbon", label: "Carbon Savings Profile", icon: Leaf },
+    { id: "marketplace", label: "Clean Energy Market", icon: ShoppingBag, badge: "Live" },
+    { id: "requests", label: "Energy Requests", icon: Sliders },
+    { id: "purchases", label: "Purchase History", icon: Coins },
+    { id: "carbon", label: "Carbon Savings", icon: Leaf },
   ];
 
   const adminNav: NavItem[] = [

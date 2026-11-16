@@ -15,6 +15,7 @@ export type StatusVariant =
 
 export interface StatusBadgeProps {
   status: string | StatusVariant;
+  variant?: string;
   label?: string;
   withDot?: boolean;
   size?: "sm" | "md";
@@ -23,15 +24,23 @@ export interface StatusBadgeProps {
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({
   status,
+  variant: explicitVariant,
   label,
   withDot = true,
   size = "md",
   className = "",
 }) => {
-  const normalized = status.toLowerCase();
+  const normalized = (status || "").toLowerCase();
 
   let variant: StatusVariant = "neutral";
-  if (["active", "success", "settled", "on_chain_settled", "completed"].includes(normalized)) {
+  if (explicitVariant) {
+    const ev = explicitVariant.toLowerCase();
+    if (ev === "success" || ev === "active") variant = "active";
+    else if (ev === "warning" || ev === "pending") variant = "pending";
+    else if (ev === "danger" || ev === "error" || ev === "failed") variant = "failed";
+    else if (ev === "info") variant = "commercial";
+    else variant = "neutral";
+  } else if (["active", "success", "settled", "on_chain_settled", "completed"].includes(normalized)) {
     variant = "active";
   } else if (["pending", "matching", "partially_filled", "partially_matched"].includes(normalized)) {
     variant = "pending";

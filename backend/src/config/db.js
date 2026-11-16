@@ -25,9 +25,9 @@ const inMemoryStore = {
     { id: 4, producer_id: 2, energy_source: "SOLAR", total_energy_kwh: 100, available_energy_kwh: 100, price_per_kwh: "0.00009100", listing_status: "ACTIVE", min_purchase_kwh: 5.0, created_at: new Date() }
   ],
   energy_requests: [
-    { id: 1, consumer_id: 6, requested_energy_kwh: 80, priority_weight: 2.0, request_status: "PENDING", max_acceptable_price: "0.00012000", urgency_level: "HIGH", created_at: new Date() },
-    { id: 2, consumer_id: 5, requested_energy_kwh: 200, priority_weight: 1.5, request_status: "PENDING", max_acceptable_price: "0.00010000", urgency_level: "NORMAL", created_at: new Date() },
-    { id: 3, consumer_id: 7, requested_energy_kwh: 50, priority_weight: 1.0, request_status: "PENDING", max_acceptable_price: "0.00009000", urgency_level: "FLEXIBLE", created_at: new Date() }
+    { id: 1, consumer_id: 6, listing_id: 1, requested_energy_kwh: 80, priority_weight: 2.0, request_status: "PENDING", max_acceptable_price: "0.00012000", urgency_level: "HIGH", message: "Backup priority power for emergency ICU ward", created_at: new Date(Date.now() - 3600000 * 4) },
+    { id: 2, consumer_id: 5, listing_id: 2, requested_energy_kwh: 200, priority_weight: 1.5, request_status: "PENDING", max_acceptable_price: "0.00010000", urgency_level: "NORMAL", message: "Clean green power for cloud server racks", created_at: new Date(Date.now() - 3600000 * 8) },
+    { id: 3, consumer_id: 7, listing_id: 3, requested_energy_kwh: 50, priority_weight: 1.0, request_status: "PENDING", max_acceptable_price: "0.00009000", urgency_level: "FLEXIBLE", message: "Residential community evening charging", created_at: new Date(Date.now() - 3600000 * 12) }
   ],
   allocation_results: [
     { id: 1, total_available_energy: 550, total_requested_energy: 330, total_allocated_energy: 330, algorithm_name: "DEMAND_AWARE_WEIGHTED_PROPORTIONAL", jain_fairness_index: 0.9842, execution_time_ms: 1.45, created_at: new Date() }
