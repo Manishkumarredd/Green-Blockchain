@@ -21,12 +21,15 @@ async function authenticateToken(req, res, next) {
     // Verify account is active
     let user = null;
     if (db.isConnected) {
-      const result = await db.query(
-        "SELECT id, full_name, email, role, wallet_address, meter_id, account_status FROM users WHERE id = $1",
-        [decoded.id]
-      );
-      user = result.rows[0];
-    } else {
+      try {
+        const result = await db.query(
+          "SELECT id, full_name, email, role, wallet_address, meter_id, account_status FROM users WHERE id = $1",
+          [decoded.id]
+        );
+        user = result.rows[0];
+      } catch (_) {}
+    }
+    if (!user) {
       user = db.inMemoryStore.users.find((u) => u.id === decoded.id);
     }
 

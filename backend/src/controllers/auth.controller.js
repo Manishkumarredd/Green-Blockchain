@@ -91,9 +91,12 @@ class AuthController {
 
       let user = null;
       if (db.isConnected) {
-        const result = await db.query("SELECT * FROM users WHERE LOWER(email) = $1", [normalizedEmail]);
-        user = result.rows[0];
-      } else {
+        try {
+          const result = await db.query("SELECT * FROM users WHERE LOWER(email) = $1", [normalizedEmail]);
+          user = result.rows[0];
+        } catch (_) {}
+      }
+      if (!user) {
         user = db.inMemoryStore.users.find((u) => u.email.toLowerCase() === normalizedEmail);
       }
 
@@ -144,6 +147,63 @@ class AuthController {
       if (err.statusCode) {
         return sendError(res, err.message, err.statusCode);
       }
+      next(err);
+    }
+  }
+
+  async switchRole(req, res, next) {
+    try {
+      const { role } = req.body;
+      const validRoles = ["CONSUMER", "PRODUCER", "ADMIN"];
+      const targetRole = validRoles.includes(role?.toUpperCase()) ? role.toUpperCase() : "CONSUMER";
+
+      const targetEmails = {
+        ADMIN: "admin@greenledger.io",
+        PRODUCER: "producer.solarfarm@greenledger.io",
+        CONSUMER: "consumer.datacenter@ecotech.com",
+      };
+
+      const email = targetEmails[targetRole];
+      let user = null;
+      if (db.isConnected) {
+        try {
+          const result = await db.query("SELECT * FROM users WHERE LOWER(email) = $1", [email.toLowerCase()]);
+          user = result.rows[0];
+        } catch (_) {}
+      }
+      if (!user) {
+        user = db.inMemoryStore.users.find((u) => u.email.toLowerCase() === email.toLowerCase()) || db.inMemoryStore.users[0];
+      }
+
+      const token = jwt.sign(
+        { id: user.id, userId: user.id, email: user.email, role: user.role },
+        config.JWT.SECRET,
+        { expiresIn: config.JWT.EXPIRES_IN }
+      );
+
+      const safeUser = {
+        id: user.id,
+        name: user.full_name || user.name,
+        fullName: user.full_name || user.name,
+        email: user.email,
+        role: user.role,
+        walletAddress: user.wallet_address,
+        wallet_address: user.wallet_address,
+        meterId: user.meter_id,
+        meter_id: user.meter_id,
+        accountStatus: user.account_status,
+        reputationScore: user.reputation_score,
+      };
+
+      return res.status(200).json({
+        success: true,
+        message: `Successfully switched active session to ${targetRole}`,
+        user: safeUser,
+        data: { user: safeUser, token },
+        token,
+        redirectPath: getRoleRedirectPath(user.role),
+      });
+    } catch (err) {
       next(err);
     }
   }

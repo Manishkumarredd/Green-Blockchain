@@ -16,4 +16,9 @@ router.put("/listings/:id", validate(updateListingSchema), producerController.up
 router.delete("/listings/:id", producerController.deleteListing);
 router.get("/dashboard", producerController.getDashboard);
 
+// Producer incoming consumer requests management & acceptance
+router.get("/requests", producerController.getIncomingRequests);
+router.post("/requests/:id/accept", producerController.acceptRequest);
+router.post("/requests/:id/reject", producerController.rejectRequest);
+
 module.exports = router;

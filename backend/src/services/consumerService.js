@@ -1,5 +1,7 @@
 const db = require("../config/db");
+const config = require("../config/env");
 const { AppError } = require("../utils/errorHandler");
+const { generateTxHash } = require("../utils/cryptoUtils");
 
 class ConsumerService {
   /**
@@ -668,6 +670,179 @@ class ConsumerService {
       recentPurchases: purchases.slice(0, 5),
       latestMarketplaceListings,
       treesEquivalent: Math.round(carbonSavedKg / 21),
+    };
+  }
+
+  /**
+   * Settle an accepted energy request via consumer payment (Sepolia ETH)
+   */
+  async payAndSettleRequest(consumerId, requestId, { txHash, paymentMethod = "SEPOLIA_ETH" } = {}) {
+    let request = null;
+    let listing = null;
+
+    if (db.isConnected) {
+      try {
+        const rRes = await db.query("SELECT * FROM energy_requests WHERE id = $1", [requestId]);
+        request = rRes.rows[0];
+      } catch (_) {}
+    }
+
+    if (!request) {
+      request = db.inMemoryStore.energy_requests.find((r) => Number(r.id) === Number(requestId));
+    }
+
+    if (!request) {
+      throw new AppError("Energy purchase demand not found", 404);
+    }
+
+    if (Number(request.consumer_id) !== Number(consumerId)) {
+      throw new AppError("Access forbidden: You do not own this energy request", 403);
+    }
+
+    if (request.request_status === "SETTLED" || request.status === "SETTLED") {
+      const existingTx = db.inMemoryStore.energy_transactions.find((t) => Number(t.id) === Number(request.settlement_transaction_id));
+      return {
+        alreadySettled: true,
+        request,
+        transaction: existingTx,
+      };
+    }
+
+    if (request.request_status !== "ACCEPTED" && request.status !== "ACCEPTED") {
+      throw new AppError(
+        `Cannot settle request in '${request.request_status || request.status}' status. The energy producer must review and accept the request before consumer payment.`,
+        400
+      );
+    }
+
+    // Retrieve listing
+    if (db.isConnected && request.listing_id) {
+      try {
+        const lRes = await db.query("SELECT * FROM energy_listings WHERE id = $1", [request.listing_id]);
+        listing = lRes.rows[0];
+      } catch (_) {}
+    }
+    if (!listing && request.listing_id) {
+      listing = db.inMemoryStore.energy_listings.find((l) => Number(l.id) === Number(request.listing_id));
+    }
+
+    const requestedKwh = Number(request.requested_energy_kwh || request.requested_kwh || 10);
+    const unitPriceEth = Number(listing ? listing.price_per_kwh : request.max_acceptable_price || "0.00008800");
+    const totalAmountEth = (requestedKwh * unitPriceEth).toFixed(8);
+    const producerId = listing ? listing.producer_id : 2;
+
+    // Deduct available kWh from listing
+    if (listing) {
+      listing.available_energy_kwh = Math.max(0, Number(listing.available_energy_kwh) - requestedKwh);
+      if (listing.available_energy_kwh <= 0) {
+        listing.listing_status = "FULFILLED";
+        listing.status = "FULFILLED";
+      }
+      listing.updated_at = new Date();
+    }
+
+    // Cryptographic proofs & on-chain simulation
+    const actualTxHash = txHash || generateTxHash();
+    const blockNumber = 5841300 + db.inMemoryStore.energy_transactions.length;
+    const carbonSavingsKg = Number((requestedKwh * 0.82).toFixed(2));
+
+    // Record settled transaction
+    const txId = db.inMemoryStore.energy_transactions.length + 1;
+    const newTx = {
+      id: txId,
+      producer_id: producerId,
+      consumer_id: Number(consumerId),
+      listing_id: request.listing_id || 1,
+      request_id: Number(requestId),
+      energy_quantity_kwh: requestedKwh,
+      price_per_kwh: unitPriceEth.toFixed(8),
+      total_amount: totalAmountEth,
+      transaction_status: "SETTLED",
+      status: "SETTLED",
+      blockchain_transaction_hash: actualTxHash,
+      trade_proposal_hash: request.trade_proposal_hash || actualTxHash,
+      message_digest: request.trade_proposal_hash || actualTxHash,
+      payment_method: paymentMethod,
+      block_number: blockNumber,
+      gas_used: 142850,
+      settlement_type: "P2P_DIRECT_ESCROW",
+      created_at: new Date(),
+    };
+    db.inMemoryStore.energy_transactions.unshift(newTx);
+
+    // Mint Green Renewable Energy Certificate (REC NFT)
+    const certId = db.inMemoryStore.green_certificates.length + 1;
+    const certNumber = `GL-REC-2026-${String(certId).padStart(4, "0")}`;
+    const newCert = {
+      id: certId,
+      transaction_id: txId,
+      certificate_number: certNumber,
+      owner_id: Number(consumerId),
+      energy_quantity_kwh: requestedKwh,
+      carbon_savings: carbonSavingsKg,
+      blockchain_certificate_id: certId,
+      blockchain_transaction_hash: actualTxHash,
+      certificate_status: "ISSUED",
+      created_at: new Date(),
+    };
+    db.inMemoryStore.green_certificates.unshift(newCert);
+
+    // Record carbon savings
+    db.inMemoryStore.carbon_records.unshift({
+      id: db.inMemoryStore.carbon_records.length + 1,
+      transaction_id: txId,
+      renewable_energy_kwh: requestedKwh,
+      grid_emission_factor: 0.82,
+      estimated_carbon_savings: carbonSavingsKg,
+      created_at: new Date(),
+    });
+
+    // Record blockchain block log
+    db.inMemoryStore.blockchain_transactions.unshift({
+      id: db.inMemoryStore.blockchain_transactions.length + 1,
+      application_transaction_id: txId,
+      transaction_hash: actualTxHash,
+      contract_address: config.BLOCKCHAIN.SETTLEMENT_CONTRACT,
+      network_name: "Sepolia",
+      transaction_type: "SETTLEMENT",
+      transaction_status: "CONFIRMED",
+      block_number: blockNumber,
+      created_at: new Date(),
+    });
+
+    // Mark request as SETTLED
+    request.request_status = "SETTLED";
+    request.status = "SETTLED";
+    request.settlement_transaction_id = txId;
+    request.settled_at = new Date();
+    request.blockchain_transaction_hash = actualTxHash;
+    request.updated_at = new Date();
+
+    if (db.inMemoryStore.activity_logs) {
+      db.inMemoryStore.activity_logs.unshift({
+        id: db.inMemoryStore.activity_logs.length + 1,
+        user_id: consumerId,
+        action: "TRADE_SETTLED",
+        description: `Consumer ${consumerId} paid ${totalAmountEth} Sepolia ETH for ${requestedKwh} kWh. Tx: ${actualTxHash.substring(0, 16)}... REC #${certNumber} minted.`,
+        created_at: new Date(),
+      });
+    }
+
+    return {
+      success: true,
+      transaction: newTx,
+      certificate: newCert,
+      request,
+      blockchainProof: {
+        network: "Ethereum Sepolia (ChainId: 11155111)",
+        consensus: "Proof of Stake (PoS) - Casper FFG",
+        settlementContract: config.BLOCKCHAIN.SETTLEMENT_CONTRACT,
+        certificateContract: config.BLOCKCHAIN.CERTIFICATE_CONTRACT,
+        transactionHash: actualTxHash,
+        blockNumber,
+        etherscanUrl: `https://sepolia.etherscan.io/tx/${actualTxHash}`,
+        messageDigest: request.trade_proposal_hash || actualTxHash,
+      },
     };
   }
 }

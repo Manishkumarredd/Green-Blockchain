@@ -3,6 +3,8 @@ const config = require("./env");
 
 let pool = null;
 let isConnected = false;
+let connectionTested = false;
+let cachedTestResult = null;
 
 // Default password hash: "Password123!"
 const DEFAULT_HASH = "$2b$10$6HMrzf5y6Mt7HgvwPAvse.M0/dPmNoF1MLrvBtXFCiRNEEg1FAro6";
@@ -76,6 +78,15 @@ inMemoryStore.settlements = inMemoryStore.energy_transactions;
 inMemoryStore.certificates = inMemoryStore.green_certificates;
 
 function initDatabase() {
+  if (process.env.USE_IN_MEMORY_DB === "true") {
+    console.log("[PostgreSQL] USE_IN_MEMORY_DB=true is set. Operating in ultra-fast zero-latency in-memory store.");
+    pool = null;
+    isConnected = false;
+    connectionTested = true;
+    cachedTestResult = { connected: false, mode: "IN_MEMORY", message: "Zero-latency in-memory normalized store active." };
+    return;
+  }
+
   if (config.DB.DATABASE_URL || config.DB.HOST) {
     try {
       pool = new Pool({
@@ -86,16 +97,19 @@ function initDatabase() {
         user: config.DB.USER,
         password: config.DB.PASSWORD,
         ssl: config.DB.SSL ? { rejectUnauthorized: false } : false,
-        max: 20,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 3000,
+        max: 10,
+        idleTimeoutMillis: 10000,
+        connectionTimeoutMillis: 1000, // Reduced from 3000 to 1000 for faster fail-fast
       });
 
       pool.on("error", (err) => {
         console.warn("[PostgreSQL] Pool client error:", err.message);
+        isConnected = false;
       });
     } catch (err) {
       console.warn("[PostgreSQL] Could not initialize pool. Active in-memory fallback enabled.");
+      pool = null;
+      isConnected = false;
     }
   }
 }
@@ -103,34 +117,55 @@ function initDatabase() {
 initDatabase();
 
 async function query(text, params = []) {
-  if (pool) {
+  if (pool && isConnected) {
     try {
       const res = await pool.query(text, params);
       return res;
     } catch (err) {
       console.warn(`[PostgreSQL Query Error: "${text.substring(0, 60)}..."]`, err.message);
+      // If connection broke, mark isConnected false so subsequent queries fail-fast to inMemoryStore
+      isConnected = false;
       throw err;
     }
   }
-  throw new Error("PostgreSQL pool is not initialized.");
+  throw new Error("PostgreSQL pool is not connected. In-memory store active.");
 }
 
 async function getClient() {
-  if (!pool) throw new Error("PostgreSQL client unavailable. Pool not connected.");
+  if (!pool || !isConnected) throw new Error("PostgreSQL client unavailable. Pool not connected.");
   return await pool.connect();
 }
 
-async function testConnection() {
-  if (!pool) return { connected: false, message: "Pool not configured, running in-memory store mode" };
+async function testConnection(forceRefresh = false) {
+  if (cachedTestResult && !forceRefresh) {
+    return cachedTestResult;
+  }
+
+  if (!pool) {
+    cachedTestResult = { connected: false, mode: "IN_MEMORY", message: "Running in-memory dual-mode store (<1ms latency)" };
+    connectionTested = true;
+    isConnected = false;
+    return cachedTestResult;
+  }
+
   try {
     const client = await pool.connect();
     const res = await client.query("SELECT NOW() as current_time");
     client.release();
     isConnected = true;
-    return { connected: true, timestamp: res.rows[0].current_time };
+    cachedTestResult = { connected: true, mode: "POSTGRESQL", timestamp: res.rows[0].current_time };
+    connectionTested = true;
+    return cachedTestResult;
   } catch (error) {
     isConnected = false;
-    return { connected: false, error: error.message };
+    // Drain and shut down unreachable pool to avoid lingering DNS threads and timeouts
+    try {
+      pool.end();
+    } catch (_) {}
+    pool = null;
+    cachedTestResult = { connected: false, mode: "IN_MEMORY", message: "RDS unreachable. Running in-memory dual-mode store (<1ms latency)", error: error.message };
+    connectionTested = true;
+    return cachedTestResult;
   }
 }
 

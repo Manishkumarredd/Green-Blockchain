@@ -224,41 +224,66 @@ export default function ConsumerRequestsPage() {
       header: "Status",
       accessor: "status",
       cell: (row) => {
-        const s = (row.status || "PENDING").toUpperCase();
+        const s = (row.status || row.request_status || "PENDING").toUpperCase();
         let variant: "warning" | "success" | "info" | "neutral" | "danger" = "warning";
-        if (s === "FULFILLED") variant = "success";
-        else if (s === "MATCHED" || s === "PARTIALLY_MATCHED") variant = "info";
-        else if (s === "CANCELLED") variant = "neutral";
-        else if (s === "REJECTED") variant = "danger";
-        return <StatusBadge status={s} variant={variant} />;
+        let displayStatus = s;
+        if (s === "FULFILLED" || s === "SETTLED") {
+          variant = "success";
+          displayStatus = "SETTLED";
+        } else if (s === "ACCEPTED") {
+          variant = "info";
+          displayStatus = "ACCEPTED (PAYMENT READY)";
+        } else if (s === "MATCHED" || s === "PARTIALLY_MATCHED") {
+          variant = "info";
+        } else if (s === "CANCELLED") {
+          variant = "neutral";
+        } else if (s === "REJECTED") {
+          variant = "danger";
+        }
+        return <StatusBadge status={displayStatus} variant={variant} />;
       },
     },
     {
       header: "Actions",
       accessor: "actions",
-      cell: (row) => (
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push(`/consumer/requests/${row.id}`)}
-            leftIcon={<Eye className="w-3.5 h-3.5" />}
-          >
-            Details
-          </Button>
-          {row.status === "PENDING" && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleOpenCancelDialog(row)}
-              className="text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
-              leftIcon={<XCircle className="w-3.5 h-3.5" />}
-            >
-              Cancel
-            </Button>
-          )}
-        </div>
-      ),
+      cell: (row) => {
+        const s = (row.status || row.request_status || "PENDING").toUpperCase();
+        return (
+          <div className="flex items-center gap-2">
+            {s === "ACCEPTED" ? (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => router.push(`/consumer/requests/${row.id}`)}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                leftIcon={<Zap className="w-3.5 h-3.5" />}
+              >
+                Pay & Settle
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push(`/consumer/requests/${row.id}`)}
+                leftIcon={<Eye className="w-3.5 h-3.5" />}
+              >
+                Details
+              </Button>
+            )}
+            {s === "PENDING" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleOpenCancelDialog(row)}
+                className="text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                leftIcon={<XCircle className="w-3.5 h-3.5" />}
+              >
+                Cancel
+              </Button>
+            )}
+          </div>
+        );
+      },
     },
   ];
 

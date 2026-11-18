@@ -8,7 +8,7 @@ const { createTransactionSchema } = require("../validators/schemas");
 
 router.use(authenticateToken);
 
-router.post("/", requireRoles("CONSUMER"), validate(createTransactionSchema), transactionController.createTransaction);
+router.post("/", requireRoles("CONSUMER", "ADMIN"), validate(createTransactionSchema), transactionController.createTransaction);
 router.get("/", transactionController.getTransactions);
 router.get("/history", transactionController.getHistory);
 router.get("/:id", transactionController.getTransactionById);

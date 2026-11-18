@@ -1,5 +1,6 @@
 const db = require("../config/db");
 const { AppError } = require("../utils/errorHandler");
+const { computeMessageDigest } = require("../utils/cryptoUtils");
 
 class ProducerService {
   async createListing({ producerId, energySource, totalEnergyKwh, pricePerKwh, minPurchaseKwh = 1.0, windowHours = 24 }) {
@@ -100,12 +101,25 @@ class ProducerService {
     const availKwh = Number(listing.available_energy_kwh || listing.available_kwh || 0);
     const soldKwh = Math.max(0, totalKwh - availKwh);
 
+    const listingRequests = db.inMemoryStore.energy_requests
+      .filter((r) => Number(r.listing_id) === Number(id))
+      .map((r) => {
+        const c = db.inMemoryStore.users.find((user) => user.id === r.consumer_id) || {};
+        return {
+          ...r,
+          consumer_name: c.full_name || "Authorized Consumer",
+          consumer_meter_id: c.meter_id || "METER-CONS",
+          consumer_wallet: c.wallet_address || "",
+        };
+      });
+
     return {
       ...listing,
       total_energy_kwh: totalKwh,
       available_energy_kwh: availKwh,
       sold_energy_kwh: soldKwh,
       related_transactions: transactions,
+      incoming_requests: listingRequests,
     };
   }
 
@@ -285,6 +299,175 @@ class ProducerService {
         ],
       },
     };
+  }
+
+  /**
+   * Get all incoming consumer purchase requests for listings owned by this producer
+   */
+  async getIncomingRequests(producerId) {
+    if (db.isConnected) {
+      try {
+        const sql = `
+          SELECT 
+            r.*,
+            l.energy_source,
+            l.price_per_kwh as listing_price,
+            l.available_energy_kwh,
+            u.full_name as consumer_name,
+            u.email as consumer_email,
+            u.meter_id as consumer_meter_id,
+            u.wallet_address as consumer_wallet_address
+          FROM energy_requests r
+          JOIN energy_listings l ON r.listing_id = l.id
+          JOIN users u ON r.consumer_id = u.id
+          WHERE l.producer_id = $1
+          ORDER BY r.created_at DESC
+        `;
+        const res = await db.query(sql, [producerId]);
+        return res.rows;
+      } catch (_) {}
+    }
+
+    // In-memory fallback
+    const producerListingIds = new Set(
+      db.inMemoryStore.energy_listings
+        .filter((l) => Number(l.producer_id) === Number(producerId))
+        .map((l) => Number(l.id))
+    );
+
+    const requests = db.inMemoryStore.energy_requests.filter((r) =>
+      producerListingIds.has(Number(r.listing_id))
+    );
+
+    return requests.map((r) => {
+      const listing = db.inMemoryStore.energy_listings.find((l) => Number(l.id) === Number(r.listing_id));
+      const consumer = db.inMemoryStore.users.find((u) => Number(u.id) === Number(r.consumer_id));
+
+      return {
+        ...r,
+        energy_source: listing ? listing.energy_source : "SOLAR",
+        listing_price: listing ? listing.price_per_kwh : "0.00008800",
+        available_energy_kwh: listing ? listing.available_energy_kwh : 0,
+        consumer_name: consumer ? consumer.full_name : "Authorized Consumer",
+        consumer_email: consumer ? consumer.email : "consumer@greenledger.io",
+        consumer_meter_id: consumer ? consumer.meter_id : "METER-CONS-000",
+        consumer_wallet_address: consumer ? consumer.wallet_address : "0x0000000000000000000000000000000000000000",
+      };
+    }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+
+  /**
+   * Accept an incoming energy purchase request and generate cryptographic Keccak-256 trade proposal hash
+   */
+  async acceptRequest(producerId, requestId, { acceptanceMessage } = {}) {
+    let request = null;
+    let listing = null;
+
+    if (db.isConnected) {
+      try {
+        const rRes = await db.query(
+          `SELECT r.*, l.producer_id, l.price_per_kwh 
+           FROM energy_requests r 
+           JOIN energy_listings l ON r.listing_id = l.id 
+           WHERE r.id = $1`,
+          [requestId]
+        );
+        request = rRes.rows[0];
+      } catch (_) {}
+    }
+
+    if (!request) {
+      request = db.inMemoryStore.energy_requests.find((r) => Number(r.id) === Number(requestId));
+      if (request) {
+        listing = db.inMemoryStore.energy_listings.find((l) => Number(l.id) === Number(request.listing_id));
+      }
+    }
+
+    if (!request) {
+      throw new AppError("Energy purchase request not found", 404);
+    }
+
+    const listingOwnerId = listing ? listing.producer_id : request.producer_id;
+    if (Number(listingOwnerId) !== Number(producerId)) {
+      throw new AppError("Access forbidden: You do not own the energy listing associated with this request.", 403);
+    }
+
+    if (request.request_status !== "PENDING" && request.status !== "PENDING") {
+      throw new AppError(`Cannot accept request in '${request.request_status || request.status}' status.`, 400);
+    }
+
+    // Cryptographic Message Digest (Keccak-256 / SHA3-256) of trade proposal
+    const tradeDigest = computeMessageDigest({
+      requestId: request.id,
+      listingId: request.listing_id,
+      producerId: Number(producerId),
+      consumerId: Number(request.consumer_id),
+      requestedKwh: Number(request.requested_energy_kwh || request.requested_kwh),
+      pricePerKwh: listing ? listing.price_per_kwh : request.max_acceptable_price,
+      acceptedAt: new Date().toISOString(),
+    });
+
+    const msg = acceptanceMessage || "Proposal accepted by renewable energy producer. Trade terms locked. Awaiting consumer Sepolia ETH escrow release.";
+
+    if (db.isConnected) {
+      try {
+        const uSql = `
+          UPDATE energy_requests
+          SET request_status = 'ACCEPTED',
+              accepted_at = CURRENT_TIMESTAMP,
+              acceptance_message = $1,
+              trade_proposal_hash = $2,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = $3
+          RETURNING *
+        `;
+        const res = await db.query(uSql, [msg, tradeDigest, requestId]);
+        return res.rows[0];
+      } catch (_) {}
+    }
+
+    // Update in-memory record
+    request.request_status = "ACCEPTED";
+    request.status = "ACCEPTED";
+    request.accepted_at = new Date();
+    request.acceptance_message = msg;
+    request.trade_proposal_hash = tradeDigest;
+    request.message_digest = tradeDigest;
+    request.updated_at = new Date();
+
+    if (db.inMemoryStore.activity_logs) {
+      db.inMemoryStore.activity_logs.unshift({
+        id: db.inMemoryStore.activity_logs.length + 1,
+        user_id: producerId,
+        action: "REQUEST_ACCEPTED",
+        description: `Producer ${producerId} accepted purchase demand #${request.id}. Cryptographic Digest: ${tradeDigest.substring(0, 16)}...`,
+        created_at: new Date(),
+      });
+    }
+
+    return request;
+  }
+
+  /**
+   * Reject an incoming purchase request
+   */
+  async rejectRequest(producerId, requestId, { reason } = {}) {
+    let request = db.inMemoryStore.energy_requests.find((r) => Number(r.id) === Number(requestId));
+    if (!request) {
+      throw new AppError("Energy purchase request not found", 404);
+    }
+
+    const listing = db.inMemoryStore.energy_listings.find((l) => Number(l.id) === Number(request.listing_id));
+    if (!listing || Number(listing.producer_id) !== Number(producerId)) {
+      throw new AppError("Access forbidden: You do not own the listing associated with this request.", 403);
+    }
+
+    request.request_status = "REJECTED";
+    request.status = "REJECTED";
+    request.rejection_reason = reason || "Declined by renewable energy producer.";
+    request.updated_at = new Date();
+
+    return request;
   }
 }
 

@@ -58,6 +58,35 @@ class ProducerController {
       next(err);
     }
   }
+
+  async getIncomingRequests(req, res, next) {
+    try {
+      const requests = await producerService.getIncomingRequests(req.user.id);
+      return sendSuccess(res, requests, "Incoming consumer requests retrieved successfully");
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async acceptRequest(req, res, next) {
+    try {
+      const { message } = req.body || {};
+      const updated = await producerService.acceptRequest(req.user.id, req.params.id, { acceptanceMessage: message });
+      return sendSuccess(res, updated, "Energy request accepted successfully. Trade proposal hash generated.");
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async rejectRequest(req, res, next) {
+    try {
+      const { reason } = req.body || {};
+      const updated = await producerService.rejectRequest(req.user.id, req.params.id, { reason });
+      return sendSuccess(res, updated, "Energy request rejected");
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 module.exports = new ProducerController();

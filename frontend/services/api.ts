@@ -83,31 +83,25 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
           const allowedRoles = match[1].split(",").map((s) => s.trim());
           const targetRole = allowedRoles[0] as "ADMIN" | "PRODUCER" | "CONSUMER";
           if (targetRole && (targetRole === "ADMIN" || targetRole === "PRODUCER" || targetRole === "CONSUMER")) {
-            const creds = {
-              ADMIN: { email: "admin@greenledger.io", password: "Password123!" },
-              PRODUCER: { email: "producer.solarfarm@greenledger.io", password: "Password123!" },
-              CONSUMER: { email: "consumer.datacenter@ecotech.com", password: "Password123!" },
-            }[targetRole];
-
             try {
-              const loginRes = await fetch(`${baseUrl}/auth/login`, {
+              const switchRes = await fetch(`${baseUrl}/auth/switch-role`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(creds),
+                body: JSON.stringify({ role: targetRole }),
               }).then((r) => r.json());
 
-              if (loginRes && loginRes.success && loginRes.token) {
-                localStorage.setItem("greenledger_auth_token", loginRes.token);
-                localStorage.setItem("greenledger_jwt", loginRes.token);
-                localStorage.setItem("greenledger_user", JSON.stringify(loginRes.user));
-                localStorage.setItem("user", JSON.stringify(loginRes.user));
+              if (switchRes && switchRes.success && switchRes.token) {
+                localStorage.setItem("greenledger_auth_token", switchRes.token);
+                localStorage.setItem("greenledger_jwt", switchRes.token);
+                localStorage.setItem("greenledger_user", JSON.stringify(switchRes.user));
+                localStorage.setItem("user", JSON.stringify(switchRes.user));
 
                 // Transparently retry original request with the correct token
                 const retryHeaders = new Headers(options.headers || {});
                 if (!retryHeaders.has("Content-Type") && !(options.body instanceof FormData)) {
                   retryHeaders.set("Content-Type", "application/json");
                 }
-                retryHeaders.set("Authorization", `Bearer ${loginRes.token}`);
+                retryHeaders.set("Authorization", `Bearer ${switchRes.token}`);
 
                 const retryResponse = await fetch(url, {
                   ...options,
@@ -171,6 +165,27 @@ export const authApi = {
     request<null>("/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) }),
 
   switchDemoRole: async (role: "PRODUCER" | "CONSUMER" | "ADMIN") => {
+    const baseUrl = getApiBaseUrl();
+    try {
+      const res = await fetch(`${baseUrl}/auth/switch-role`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      }).then((r) => r.json());
+
+      if (res && res.success && res.token) {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("greenledger_auth_token", res.token);
+          localStorage.setItem("greenledger_jwt", res.token);
+          localStorage.setItem("greenledger_user", JSON.stringify(res.user));
+          localStorage.setItem("user", JSON.stringify(res.user));
+        }
+        return { token: res.token, user: res.user };
+      }
+    } catch (e) {
+      console.warn("Fast switch-role failed, attempting credential login fallback:", e);
+    }
+
     const creds = {
       ADMIN: { email: "admin@greenledger.io", password: "Password123!" },
       PRODUCER: { email: "producer.solarfarm@greenledger.io", password: "Password123!" },
@@ -226,6 +241,20 @@ export const producersApi = {
   deleteListing: (id: string | number) => request<any>(`/producers/listings/${id}`, { method: "DELETE" }),
 
   getDashboard: () => request<any>("/producers/dashboard", { method: "GET" }),
+
+  getIncomingRequests: () => request<any[]>("/producers/requests", { method: "GET" }),
+
+  acceptRequest: (id: string | number, message?: string) =>
+    request<any>(`/producers/requests/${id}/accept`, {
+      method: "POST",
+      body: JSON.stringify({ message }),
+    }),
+
+  rejectRequest: (id: string | number, reason?: string) =>
+    request<any>(`/producers/requests/${id}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
 };
 
 // -----------------------------------------------------------------------------
@@ -262,6 +291,15 @@ export const consumersApi = {
   getRequestById: (id: string | number) => request<any>(`/consumers/requests/${id}`, { method: "GET" }),
 
   cancelRequest: (id: string | number) => request<any>(`/consumers/requests/${id}/cancel`, { method: "PATCH" }),
+
+  payAndSettleRequest: (
+    id: string | number,
+    payload?: { txHash?: string; paymentMethod?: string }
+  ) =>
+    request<any>(`/consumers/requests/${id}/pay`, {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    }),
 
   getMyPurchases: (params?: {
     page?: number;

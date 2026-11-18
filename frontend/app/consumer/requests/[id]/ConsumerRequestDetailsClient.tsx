@@ -20,6 +20,8 @@ import {
   Info,
   Calendar,
   Building,
+  Hash,
+  Award,
 } from "lucide-react";
 import { DashboardLayout } from "../../../../components/layout/DashboardLayout";
 import { PageHeader } from "../../../../components/ui/PageHeader";
@@ -46,6 +48,7 @@ export default function ConsumerRequestDetailsClient() {
   // Cancel Modal State
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isPaying, setIsPaying] = useState(false);
 
   useEffect(() => {
     setRole("CONSUMER");
@@ -68,6 +71,35 @@ export default function ConsumerRequestDetailsClient() {
       setLoading(false);
     }
   }, [requestId]);
+
+  const handlePayAndSettle = async () => {
+    try {
+      setIsPaying(true);
+      const res = await consumersApi.payAndSettleRequest(requestId);
+      if (res && res.success) {
+        addToast({
+          type: "success",
+          title: "Payment Confirmed & Trade Settled!",
+          message: `Energy trade settled on Ethereum Sepolia. Block confirmed and ERC-721 Green Certificate REC minted!`,
+        });
+        await fetchRequestDetails();
+      } else {
+        addToast({
+          type: "error",
+          title: "Payment Settlement Failed",
+          message: res?.error || "Could not complete payment on blockchain.",
+        });
+      }
+    } catch (err: any) {
+      addToast({
+        type: "error",
+        title: "Settlement Error",
+        message: err?.message || "Failed to execute escrow payment settlement.",
+      });
+    } finally {
+      setIsPaying(false);
+    }
+  };
 
   useEffect(() => {
     fetchRequestDetails();
@@ -158,7 +190,12 @@ export default function ConsumerRequestDetailsClient() {
     timeline = [],
   } = request;
 
-  const isPending = status === "PENDING";
+  const isPending = status === "PENDING" || request.request_status === "PENDING";
+  const isAccepted = status === "ACCEPTED" || request.request_status === "ACCEPTED";
+  const isSettled = status === "SETTLED" || request.request_status === "SETTLED";
+  const acceptanceMessage = request.acceptance_message;
+  const messageDigest = request.trade_proposal_hash || request.message_digest;
+  const blockchainTxHash = request.blockchain_transaction_hash;
   const carbonEstimateKg = (Number(requested_energy_kwh) * 0.82).toFixed(2);
   const treesEquivalent = Math.round(Number(carbonEstimateKg) / 21);
 
@@ -221,6 +258,121 @@ export default function ConsumerRequestDetailsClient() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column (2 Cols) */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Workflow Banner 1: Awaiting Producer Acceptance */}
+            {isPending && (
+              <div className="bg-amber-50 dark:bg-amber-950/40 p-5 rounded-2xl border border-amber-200 dark:border-amber-800 flex items-start gap-3.5 shadow-xs">
+                <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-sm font-bold text-amber-900 dark:text-amber-200">
+                    Awaiting Producer Acceptance & Trade Proposal
+                  </h4>
+                  <p className="text-xs text-amber-700 dark:text-amber-300 mt-1 leading-relaxed">
+                    This energy demand is currently in <span className="font-semibold">PENDING</span> status. The renewable energy producer must review and sign off on the trade proposal first. Once accepted, you can authorize payment with Sepolia ETH and settle the transaction.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Workflow Banner 2: Request Accepted by Producer -> Ready for Consumer Payment */}
+            {isAccepted && (
+              <div className="bg-emerald-50 dark:bg-emerald-950/40 p-6 rounded-2xl border-2 border-emerald-500/40 space-y-4 shadow-sm animate-fadeIn">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <span className="p-2.5 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="w-7 h-7" />
+                    </span>
+                    <div>
+                      <h3 className="text-base font-extrabold text-navy-900 dark:text-white">
+                        Trade Proposal Accepted by Producer!
+                      </h3>
+                      <p className="text-xs text-navy-600 dark:text-navy-300">
+                        Capacity locked. Authorize payment to execute settlement on Ethereum Sepolia.
+                      </p>
+                    </div>
+                  </div>
+
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-md hover:shadow-lg transition shrink-0"
+                    onClick={handlePayAndSettle}
+                    loading={isPaying}
+                    icon={Coins}
+                  >
+                    Pay with Sepolia ETH & Settle Trade
+                  </Button>
+                </div>
+
+                {acceptanceMessage && (
+                  <div className="p-3.5 bg-white dark:bg-navy-900 rounded-xl border border-emerald-200 dark:border-emerald-800 text-xs">
+                    <p className="font-bold text-navy-700 dark:text-navy-300">Producer Acceptance Note:</p>
+                    <p className="text-navy-600 dark:text-navy-400 italic mt-0.5">&ldquo;{acceptanceMessage}&rdquo;</p>
+                  </div>
+                )}
+
+                {messageDigest && (
+                  <div className="bg-navy-900 text-white p-3.5 rounded-xl space-y-1">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="font-bold text-navy-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Hash className="w-3.5 h-3.5 text-indigo-400" />
+                        Signed Keccak-256 Message Digest (Trade Commitment)
+                      </span>
+                      <span className="text-[10px] text-emerald-400 font-semibold">Verified Off-Chain Proposal</span>
+                    </div>
+                    <p className="font-mono text-xs text-indigo-300 break-all bg-navy-950 p-2.5 rounded border border-navy-800">
+                      {messageDigest}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Workflow Banner 3: Trade Settled on Ethereum */}
+            {isSettled && (
+              <div className="bg-brand-50 dark:bg-brand-950/40 p-5 rounded-2xl border border-brand-200 dark:border-brand-800 space-y-3 animate-fadeIn">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-brand-600 dark:text-brand-400" />
+                    <h3 className="text-sm font-extrabold text-navy-900 dark:text-white">
+                      Settlement Finalized on Ethereum Sepolia
+                    </h3>
+                  </div>
+                  <span className="text-[10px] px-2.5 py-1 rounded-full font-bold bg-brand-100 dark:bg-brand-900/60 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-700">
+                    SETTLED & CLEARED
+                  </span>
+                </div>
+                <p className="text-xs text-navy-600 dark:text-navy-400">
+                  Escrow payment released to producer. Renewable Energy Certificate (REC NFT) minted to your wallet on the smart contract.
+                </p>
+                {blockchainTxHash && (
+                  <div className="flex items-center gap-2 font-mono text-xs bg-white dark:bg-navy-900 p-2.5 rounded-xl border border-navy-200 dark:border-navy-800">
+                    <span className="text-navy-400 font-sans text-[11px] font-bold">Sepolia Tx:</span>
+                    <a
+                      href={`https://sepolia.etherscan.io/tx/${blockchainTxHash}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1 truncate"
+                    >
+                      {blockchainTxHash}
+                      <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                    </a>
+                  </div>
+                )}
+                <div className="flex items-center gap-3 pt-1">
+                  <Link href="/consumer/purchases">
+                    <Button variant="primary" size="sm" icon={ExternalLink}>
+                      View Settled Purchases Ledger
+                    </Button>
+                  </Link>
+                  <Link href="/verify-certificate/1">
+                    <Button variant="outline" size="sm" icon={Award}>
+                      Verify Green Certificate (REC)
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            )}
+
             {/* 1. Demand & Pricing Specifications */}
             <Card className="p-6">
               <h3 className="text-base font-bold text-navy-900 dark:text-white mb-4 flex items-center gap-2">

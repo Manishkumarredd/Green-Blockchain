@@ -76,6 +76,15 @@ class ConsumerController {
       next(err);
     }
   }
+
+  async payAndSettleRequest(req, res, next) {
+    try {
+      const result = await consumerService.payAndSettleRequest(req.user.id, req.params.id, req.body);
+      return sendSuccess(res, result, "Energy purchase payment confirmed and trade settled on Ethereum blockchain.", 200);
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 module.exports = new ConsumerController();

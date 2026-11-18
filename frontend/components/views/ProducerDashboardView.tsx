@@ -20,7 +20,11 @@ import {
   AlertCircle,
   Clock,
   Layers,
+  UserCheck,
+  Hash,
+  ArrowRight,
 } from "lucide-react";
+import { keccak256, stringToBytes } from "viem";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -74,6 +78,14 @@ export const ProducerDashboardView: React.FC = () => {
   const [cancellingListingId, setCancellingListingId] = useState<number | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
 
+  // Incoming Consumer Requests State
+  const [incomingRequests, setIncomingRequests] = useState<any[]>([]);
+  const [acceptingRequest, setAcceptingRequest] = useState<any | null>(null);
+  const [acceptanceMessage, setAcceptanceMessage] = useState(
+    "Proposal accepted by Helios Solar Park. Trade terms locked. Awaiting consumer Sepolia ETH escrow release."
+  );
+  const [isAccepting, setIsAccepting] = useState(false);
+
   // Pagination for transactions
   const [txPage, setTxPage] = useState(1);
   const txPerPage = 5;
@@ -82,11 +94,17 @@ export const ProducerDashboardView: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await producersApi.getDashboard();
+      const [res, reqRes] = await Promise.all([
+        producersApi.getDashboard(),
+        producersApi.getIncomingRequests(),
+      ]);
       if (res.success && res.data) {
         setDashboardData(res.data);
       } else {
         setError(res.error || "Failed to load producer analytics");
+      }
+      if (reqRes && reqRes.success && Array.isArray(reqRes.data)) {
+        setIncomingRequests(reqRes.data);
       }
     } catch (err: any) {
       setError(err.message || "Failed to connect to backend service");
@@ -94,6 +112,37 @@ export const ProducerDashboardView: React.FC = () => {
       setLoading(false);
     }
   }, []);
+
+  const handleConfirmAccept = async () => {
+    if (!acceptingRequest) return;
+    try {
+      setIsAccepting(true);
+      const res = await producersApi.acceptRequest(acceptingRequest.id, acceptanceMessage);
+      if (res.success) {
+        addToast({
+          type: "success",
+          title: "Energy Purchase Request Accepted",
+          message: `Demand #${acceptingRequest.id} accepted. Cryptographic Keccak-256 trade proposal hash issued. Consumer can now execute on-chain payment.`,
+        });
+        setAcceptingRequest(null);
+        fetchDashboard();
+      } else {
+        addToast({
+          type: "error",
+          title: "Acceptance Failed",
+          message: res.error || "Could not accept request.",
+        });
+      }
+    } catch (err: any) {
+      addToast({
+        type: "error",
+        title: "Acceptance Error",
+        message: err.message || "Failed to submit proposal acceptance.",
+      });
+    } finally {
+      setIsAccepting(false);
+    }
+  };
 
   useEffect(() => {
     fetchDashboard();
@@ -399,6 +448,138 @@ export const ProducerDashboardView: React.FC = () => {
     },
   ];
 
+  const incomingRequestColumns: Column<any>[] = [
+    {
+      key: "id",
+      header: "Demand ID",
+      render: (r) => (
+        <span className="font-mono text-xs font-bold text-navy-900 dark:text-white">
+          REQ-#{String(r.id).padStart(4, "0")}
+        </span>
+      ),
+    },
+    {
+      key: "consumer",
+      header: "Consumer Entity",
+      render: (r) => (
+        <div>
+          <p className="text-xs font-bold text-navy-900 dark:text-white flex items-center gap-1.5">
+            <UserCheck className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />
+            {r.consumer_name || "Authorized Consumer"}
+          </p>
+          <p className="text-[10px] font-mono text-navy-400">
+            {r.consumer_meter_id || "METER-CONS"}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: "requested_energy_kwh",
+      header: "Volume / Source",
+      render: (r) => (
+        <div>
+          <p className="text-xs font-bold text-navy-900 dark:text-white">
+            {Number(r.requested_energy_kwh || r.requested_kwh).toLocaleString()} kWh
+          </p>
+          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase">
+            {r.energy_source || "SOLAR"}
+          </span>
+        </div>
+      ),
+    },
+    {
+      key: "max_acceptable_price",
+      header: "Offer Price",
+      render: (r) => {
+        const kwh = Number(r.requested_energy_kwh || r.requested_kwh);
+        const price = Number(r.max_acceptable_price || r.listing_price || 0.000088);
+        const total = (kwh * price).toFixed(6);
+        return (
+          <div>
+            <span className="font-mono text-xs text-navy-600 dark:text-navy-400">
+              {price.toFixed(8)} ETH
+            </span>
+            <p className="text-[10px] font-bold text-brand-600 dark:text-brand-400">
+              Total: {total} ETH
+            </p>
+          </div>
+        );
+      },
+    },
+    {
+      key: "urgency",
+      header: "Priority Tier",
+      render: (r) => (
+        <span
+          className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+            r.urgency_level === "HIGH"
+              ? "bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
+              : "bg-navy-100 dark:bg-navy-800 text-navy-600 dark:text-navy-300"
+          }`}
+        >
+          {r.priority_weight ? `${r.priority_weight}x` : "1.0x"} • {r.urgency_level || "NORMAL"}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (r) => {
+        const st = r.request_status || r.status || "PENDING";
+        return (
+          <StatusBadge
+            status={
+              st === "ACCEPTED"
+                ? "Awaiting Payment"
+                : st === "SETTLED"
+                ? "Settled"
+                : st
+            }
+            size="sm"
+          />
+        );
+      },
+    },
+    {
+      key: "actions",
+      header: "Trade Action",
+      render: (r) => {
+        const st = r.request_status || r.status || "PENDING";
+        if (st === "PENDING") {
+          return (
+            <Button
+              variant="primary"
+              size="sm"
+              icon={CheckCircle2}
+              onClick={() => {
+                setAcceptingRequest(r);
+                setAcceptanceMessage(
+                  `Proposal accepted by Helios Solar Park. Trade terms for ${r.requested_energy_kwh || r.requested_kwh} kWh locked. Awaiting consumer Sepolia ETH escrow release.`
+                );
+              }}
+            >
+              Accept Demand
+            </Button>
+          );
+        }
+        if (st === "ACCEPTED") {
+          return (
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-800">
+              <Clock className="w-3 h-3" />
+              <span>Awaiting Payment</span>
+            </span>
+          );
+        }
+        return (
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
+            <CheckCircle2 className="w-3 h-3" />
+            <span>Settled & Paid</span>
+          </span>
+        );
+      },
+    },
+  ];
+
   return (
     <div className="space-y-8 pb-12">
       {/* Header */}
@@ -633,6 +814,39 @@ export const ProducerDashboardView: React.FC = () => {
         )}
       </div>
 
+      {/* Incoming Consumer Purchase Demands Section */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-navy-900 dark:text-white flex items-center gap-2">
+              <Zap className="w-5 h-5 text-amber-500" />
+              Incoming Consumer Purchase Demands & Trade Proposals
+            </h2>
+            <p className="text-xs text-navy-500 dark:text-navy-400">
+              Review and accept direct energy purchase requests submitted by verified consumers.
+            </p>
+          </div>
+          <span className="text-xs font-mono font-semibold px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+            {incomingRequests.filter((r) => (r.request_status || r.status) === "PENDING").length} Pending Review
+          </span>
+        </div>
+
+        {incomingRequests.length === 0 ? (
+          <div className="p-8 bg-white dark:bg-navy-900 rounded-2xl border border-navy-200 dark:border-navy-800 text-center">
+            <EmptyState
+              title="No Incoming Purchase Demands"
+              description="When consumers submit energy bids or purchase demands targeting your listings, they will appear here for review and cryptographic trade proposal acceptance."
+            />
+          </div>
+        ) : (
+          <DataTable
+            data={incomingRequests}
+            columns={incomingRequestColumns}
+            keyExtractor={(item) => item.id}
+          />
+        )}
+      </div>
+
       {/* Recent Transactions Section */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -743,6 +957,119 @@ export const ProducerDashboardView: React.FC = () => {
         variant="danger"
         loading={cancelLoading}
       />
+
+      {/* Modal: Accept Consumer Demand & Issue Cryptographic Proposal */}
+      {acceptingRequest && (
+        <Modal
+          isOpen={true}
+          onClose={() => setAcceptingRequest(null)}
+          title={`Accept Purchase Demand #REQ-${String(acceptingRequest.id).padStart(4, "0")}`}
+        >
+          <div className="space-y-4 pt-2">
+            <div className="bg-amber-50 dark:bg-amber-950/40 p-3.5 rounded-xl border border-amber-200 dark:border-amber-800 text-xs space-y-1">
+              <p className="font-bold text-amber-800 dark:text-amber-200 flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                Producer Proposal Commitment
+              </p>
+              <p className="text-amber-700 dark:text-amber-300">
+                Accepting this demand locks the energy capacity and issues a signed cryptographic trade proposal hash. The transaction will complete automatically once the consumer executes the Sepolia ETH escrow release.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs bg-navy-50 dark:bg-navy-900/60 p-3 rounded-xl border border-navy-100 dark:border-navy-800">
+              <div>
+                <span className="text-navy-400 uppercase text-[10px] font-bold">Consumer</span>
+                <p className="font-bold text-navy-900 dark:text-white mt-0.5">
+                  {acceptingRequest.consumer_name || "Authorized Consumer"}
+                </p>
+                <p className="font-mono text-[10px] text-navy-400">
+                  {acceptingRequest.consumer_meter_id || "METER-CONS"}
+                </p>
+              </div>
+
+              <div>
+                <span className="text-navy-400 uppercase text-[10px] font-bold">Demand Volume</span>
+                <p className="font-bold text-navy-900 dark:text-white mt-0.5">
+                  {acceptingRequest.requested_energy_kwh || acceptingRequest.requested_kwh} kWh
+                </p>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase">
+                  {acceptingRequest.energy_source || "SOLAR"}
+                </span>
+              </div>
+
+              <div>
+                <span className="text-navy-400 uppercase text-[10px] font-bold">Offer Tariff</span>
+                <p className="font-mono font-bold text-navy-900 dark:text-white mt-0.5">
+                  {acceptingRequest.max_acceptable_price || acceptingRequest.listing_price} ETH / kWh
+                </p>
+              </div>
+
+              <div>
+                <span className="text-navy-400 uppercase text-[10px] font-bold">Total Trade Value</span>
+                <p className="font-mono font-extrabold text-brand-600 dark:text-brand-400 mt-0.5">
+                  {(
+                    Number(acceptingRequest.requested_energy_kwh || acceptingRequest.requested_kwh) *
+                    Number(acceptingRequest.max_acceptable_price || acceptingRequest.listing_price || 0.000088)
+                  ).toFixed(6)}{" "}
+                  ETH
+                </p>
+              </div>
+            </div>
+
+            {/* Cryptographic Keccak-256 Digest Preview */}
+            <div className="bg-navy-900 text-white p-3 rounded-xl space-y-1">
+              <span className="text-[10px] uppercase font-bold text-navy-400 flex items-center gap-1">
+                <Hash className="w-3 h-3 text-indigo-400" />
+                Computed Keccak-256 Message Digest
+              </span>
+              <p className="font-mono text-[11px] text-indigo-300 break-all bg-navy-950 p-2 rounded border border-navy-800">
+                {keccak256(
+                  stringToBytes(
+                    JSON.stringify({
+                      reqId: acceptingRequest.id,
+                      kwh: acceptingRequest.requested_energy_kwh || acceptingRequest.requested_kwh,
+                      consumer: acceptingRequest.consumer_name,
+                      time: new Date().toISOString().slice(0, 10),
+                    })
+                  )
+                )}
+              </p>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-navy-700 dark:text-navy-300 block mb-1">
+                Acceptance Message / Escrow Notice to Consumer
+              </label>
+              <textarea
+                rows={3}
+                value={acceptanceMessage}
+                onChange={(e) => setAcceptanceMessage(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-navy-950 border border-navy-200 dark:border-navy-800 text-navy-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-navy-100 dark:border-navy-800">
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={() => setAcceptingRequest(null)}
+                disabled={isAccepting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                type="button"
+                onClick={handleConfirmAccept}
+                loading={isAccepting}
+                icon={CheckCircle2}
+              >
+                Confirm & Accept Trade Proposal
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

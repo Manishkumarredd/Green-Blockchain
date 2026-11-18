@@ -14,6 +14,7 @@ router.post("/requests", validate(createRequestSchema), consumerController.creat
 router.get("/requests", consumerController.getMyRequests);
 router.get("/requests/:id", consumerController.getRequestById);
 router.patch("/requests/:id/cancel", consumerController.cancelRequest);
+router.post("/requests/:id/pay", consumerController.payAndSettleRequest);
 router.get("/purchases", consumerController.getMyPurchases);
 router.get("/carbon-savings", consumerController.getCarbonSavings);
 router.get("/allocations", consumerController.getMyAllocations);

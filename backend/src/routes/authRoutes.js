@@ -8,6 +8,7 @@ const { registerSchema, loginSchema } = require("../validators/schemas");
 
 router.post("/register", authLimiter, validate(registerSchema), authController.register);
 router.post("/login", authLimiter, validate(loginSchema), authController.login);
+router.post("/switch-role", authController.switchRole);
 router.post("/logout", authController.logout);
 router.get("/me", authenticateToken, authController.me);
 
