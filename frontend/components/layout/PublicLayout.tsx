@@ -53,22 +53,24 @@ export const PublicLayout: React.FC<{ children: React.ReactNode }> = ({ children
               {theme === "light" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4 text-amber-400" />}
             </button>
 
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setActiveView("auth")}
-            >
-              Login
-            </Button>
+            <Link href="/login">
+              <Button
+                variant="secondary"
+                size="sm"
+              >
+                Login
+              </Button>
+            </Link>
 
-            <Button
-              variant="primary"
-              size="sm"
-              rightIcon={<ArrowRight className="w-4 h-4" />}
-              onClick={() => setActiveView("auth")}
-            >
-              Get Started
-            </Button>
+            <Link href="/register">
+              <Button
+                variant="primary"
+                size="sm"
+                rightIcon={<ArrowRight className="w-4 h-4" />}
+              >
+                Get Started
+              </Button>
+            </Link>
           </div>
 
           {/* Mobile Menu Button */}
@@ -102,28 +104,24 @@ export const PublicLayout: React.FC<{ children: React.ReactNode }> = ({ children
               </a>
             ))}
             <div className="pt-3 border-t border-navy-100 dark:border-navy-800 flex flex-col gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                fullWidth
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  setActiveView("auth");
-                }}
-              >
-                Login
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                fullWidth
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  setActiveView("auth");
-                }}
-              >
-                Get Started
-              </Button>
+              <Link href="/login" onClick={() => setMobileMenuOpen(false)}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  fullWidth
+                >
+                  Login
+                </Button>
+              </Link>
+              <Link href="/register" onClick={() => setMobileMenuOpen(false)}>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  fullWidth
+                >
+                  Get Started
+                </Button>
+              </Link>
             </div>
           </div>
         )}

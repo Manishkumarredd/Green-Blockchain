@@ -12,13 +12,18 @@ module.exports = {
   CORS_ORIGIN: process.env.CORS_ORIGIN || "http://localhost:3000",
 
   DB: {
-    HOST: process.env.DB_HOST || "localhost",
-    PORT: parseInt(process.env.DB_PORT, 10) || 5432,
-    NAME: process.env.DB_NAME || "greenledger_db",
-    USER: process.env.DB_USER || "postgres",
-    PASSWORD: process.env.DB_PASSWORD || "postgres",
-    SSL: process.env.DB_SSL === "true",
+    HOST: process.env.RDS_HOST || process.env.DB_HOST || "localhost",
+    PORT: parseInt(process.env.RDS_PORT || process.env.DB_PORT, 10) || 5432,
+    NAME: process.env.RDS_DATABASE || process.env.DB_NAME || "postgres",
+    USER: process.env.RDS_USER || process.env.DB_USER || "postgres",
+    PASSWORD: process.env.RDS_PASSWORD || process.env.DB_PASSWORD || "postgres",
+    SSL: process.env.DB_SSL === "true" || process.env.NODE_ENV === "production",
     DATABASE_URL: process.env.DATABASE_URL || "",
+  },
+
+  S3: {
+    BUCKET_NAME: process.env.S3_DATA_BUCKET || process.env.S3_BUCKET_NAME || "greenledger-data-477579576684-syd",
+    REGION: process.env.AWS_REGION || "ap-southeast-2",
   },
 
   JWT: {

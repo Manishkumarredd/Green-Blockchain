@@ -7,7 +7,7 @@ const { validate } = require("../middleware/validationMiddleware");
 const { createListingSchema, updateListingSchema } = require("../validators/schemas");
 
 router.use(authenticateToken);
-router.use(requireRoles("PRODUCER"));
+router.use(requireRoles("PRODUCER", "ADMIN"));
 
 router.post("/listings", validate(createListingSchema), producerController.createListing);
 router.get("/listings", producerController.getMyListings);

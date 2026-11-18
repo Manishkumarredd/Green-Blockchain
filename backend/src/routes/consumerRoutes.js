@@ -7,7 +7,7 @@ const { validate } = require("../middleware/validationMiddleware");
 const { createRequestSchema } = require("../validators/schemas");
 
 router.use(authenticateToken);
-router.use(requireRoles("CONSUMER"));
+router.use(requireRoles("CONSUMER", "ADMIN"));
 
 router.get("/dashboard", consumerController.getDashboard);
 router.post("/requests", validate(createRequestSchema), consumerController.createRequest);

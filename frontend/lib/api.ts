@@ -1,9 +1,19 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
+const getApiBase = () => {
+  if (typeof window !== "undefined") {
+    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+      return "http://localhost:5000/api/v1";
+    }
+  }
+  return process.env.NEXT_PUBLIC_API_URL || "https://l19idchgw6.execute-api.ap-southeast-2.amazonaws.com/api/v1";
+};
 
 export async function fetchFromApi(endpoint: string, options: RequestInit = {}) {
-  const url = `${API_BASE}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+  const base = getApiBase();
+  const url = `${base}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
   
-  const token = typeof window !== "undefined" ? localStorage.getItem("greenledger_jwt") : null;
+  const token = typeof window !== "undefined"
+    ? (localStorage.getItem("greenledger_auth_token") || localStorage.getItem("greenledger_jwt"))
+    : null;
 
   const headers = {
     "Content-Type": "application/json",

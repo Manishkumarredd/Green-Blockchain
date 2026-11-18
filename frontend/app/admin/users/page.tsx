@@ -51,7 +51,7 @@ export default function AdminUsersPage() {
   useEffect(() => {
     setRole("ADMIN");
     try {
-      const stored = localStorage.getItem("user");
+      const stored = localStorage.getItem("greenledger_user") || localStorage.getItem("user");
       if (stored) {
         const u = JSON.parse(stored);
         if (u.id) setCurrentAdminId(u.id);

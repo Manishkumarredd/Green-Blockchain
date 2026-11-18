@@ -1,8 +1,11 @@
 /** @type {import('next').NextConfig} */
+const isStaticExport = process.env.NEXT_EXPORT === "true";
+
 const nextConfig = {
+  ...(isStaticExport ? { output: "export" } : {}),
   reactStrictMode: true,
-  env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1",
+  images: {
+    unoptimized: true,
   },
   webpack: (config) => {
     config.externals.push("pino-pretty", "lokijs", "encoding");

@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { useApp } from "../common/AppContext";
 import { Sidebar } from "../ui/Sidebar";
 import { Navbar } from "../ui/Navbar";
 import { ToastContainer } from "../ui/Toast";
+import { authApi } from "../../services/api";
 
 export interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -19,7 +20,30 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   onNavSelect,
 }) => {
   const router = useRouter();
-  const { role } = useApp();
+  const pathname = usePathname();
+  const { role, setRole } = useApp();
+
+  useEffect(() => {
+    let targetRole: "PRODUCER" | "CONSUMER" | "ADMIN" | null = null;
+    if (pathname?.startsWith("/admin")) targetRole = "ADMIN";
+    else if (pathname?.startsWith("/consumer")) targetRole = "CONSUMER";
+    else if (pathname?.startsWith("/producer")) targetRole = "PRODUCER";
+
+    if (targetRole) {
+      if (role !== targetRole) {
+        setRole(targetRole);
+      }
+      try {
+        const stored = typeof window !== "undefined"
+          ? (localStorage.getItem("greenledger_user") || localStorage.getItem("user"))
+          : null;
+        const u = stored ? JSON.parse(stored) : null;
+        if (!u || u.role !== targetRole) {
+          authApi.switchDemoRole(targetRole);
+        }
+      } catch (_) {}
+    }
+  }, [pathname, role, setRole]);
 
   const handleNavSelect = (navId: string) => {
     if (onNavSelect) {

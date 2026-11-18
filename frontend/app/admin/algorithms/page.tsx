@@ -47,7 +47,7 @@ import { Skeleton, SkeletonCard, SkeletonTable } from "../../../components/ui/Lo
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorState } from "../../../components/ui/ErrorState";
 import { useApp } from "../../../components/common/AppContext";
-import { algorithmsApi, allocationApi } from "../../../services/api";
+import { algorithmsApi, allocationApi, authApi } from "../../../services/api";
 
 const ALGO_COLORS = {
   fcfs: "#94A3B8",
@@ -98,6 +98,17 @@ export default function AdminAlgorithmsPage() {
     try {
       setLoading(true);
       setError(null);
+
+      // Ensure admin authentication if current local user is not ADMIN
+      if (typeof window !== "undefined") {
+        try {
+          const stored = localStorage.getItem("greenledger_user") || localStorage.getItem("user");
+          const u = stored ? JSON.parse(stored) : null;
+          if (!u || u.role !== "ADMIN") {
+            await authApi.switchDemoRole("ADMIN");
+          }
+        } catch (_) {}
+      }
 
       // 1. Fetch scenarios
       const scenRes = await algorithmsApi.getExperiments();
@@ -278,13 +289,43 @@ export default function AdminAlgorithmsPage() {
   }
 
   if (error) {
+    const isRoleMismatch = typeof error === "string" && error.includes("Requires one of [ADMIN]");
     return (
       <DashboardLayout activeNavId="algorithms">
-        <ErrorState
-          title="Algorithms Dashboard Unavailable"
-          message={error}
-          onRetry={loadInitialData}
-        />
+        <div className="max-w-xl mx-auto my-12 p-8 rounded-3xl bg-white dark:bg-navy-900 border border-navy-200 dark:border-navy-800 shadow-xl text-center">
+          <div className="w-14 h-14 rounded-2xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 flex items-center justify-center mx-auto mb-4 text-amber-600 dark:text-amber-400">
+            <AlertCircle className="w-7 h-7" />
+          </div>
+          <h3 className="text-lg font-bold text-navy-900 dark:text-white">
+            {isRoleMismatch ? "Admin Authentication Required" : "Algorithms Dashboard Unavailable"}
+          </h3>
+          <p className="mt-2 text-xs sm:text-sm text-navy-500 dark:text-navy-400 leading-relaxed">
+            {isRoleMismatch
+              ? "Your current session is authenticated as a Producer. Switch to the Administrator demo session to access and run platform research algorithms."
+              : error}
+          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            {isRoleMismatch && (
+              <Button
+                variant="primary"
+                onClick={async () => {
+                  setLoading(true);
+                  await authApi.switchDemoRole("ADMIN");
+                  setRole("ADMIN");
+                  await loadInitialData();
+                }}
+              >
+                Switch to Admin & Load Dashboard
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              onClick={loadInitialData}
+            >
+              Try Again
+            </Button>
+          </div>
+        </div>
       </DashboardLayout>
     );
   }

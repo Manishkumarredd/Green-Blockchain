@@ -1,0 +1,492 @@
+{
+  "testEnvironment": {
+    "platform": "win32",
+    "arch": "x64",
+    "nodeVersion": "v24.15.0",
+    "cpuCores": 16,
+    "memoryTotalGb": "15.70"
+  },
+  "pricingBenchmark": {
+    "latencyMs": 0.005,
+    "samplePrice": {
+      "referencePriceEth": 0.0001,
+      "baseTariffEth": 0.0001,
+      "calculatedPriceEth": 0.0001045,
+      "recommendedPriceEth": 0.0001045,
+      "supplyDemandRatio": 1.3,
+      "imbalanceIndex": 0.13,
+      "totalAvailableSupplyKwh": 500,
+      "totalDemandKwh": 650,
+      "ratioAdjustmentPct": 0.1,
+      "touMultiplier": 1,
+      "touPeriodLabel": "Standard Shoulder Hours",
+      "isPeakHour": false,
+      "sourceMultiplier": 0.95,
+      "sourceReason": "Midday solar insolation surplus discount (5%)",
+      "ruleReason": "High demand (R = 1.3 > 1). Demand exceeds available generation; triggers a 10% grid congestion adjustment.",
+      "clampNotice": "Price is within regulatory tolerance.",
+      "isClamped": false,
+      "minPriceFloorEth": 0.00005,
+      "maxPriceCeilingEth": 0.0002,
+      "formulaSummary": "P = 0.0001 * (1 + 0.1) * 1 * 0.95 = 0.00010450 ETH/kWh"
+    }
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCENARIO_1_LOW_SUPPLY_HIGH_DEMAND",
+      "scenarioName": "Scenario 1: Low Energy Supply & High Demand (Scarcity Deficit)",
+      "description": "Supply is constrained at 250 kWh while 8 consumers demand 680 kWh (Deficit Ratio: 2.72x).",
+      "type": "STANDARD_COMPARISON",
+      "totalSupplyKwh": 250,
+      "totalDemandKwh": 729.7,
+      "consumerCount": 8,
+      "metrics": {
+        "jainsIndex": {
+          "fcfs": 0.375,
+          "bpa": 1,
+          "daWpa": 0.9166
+        },
+        "overallFulfillment": {
+          "fcfs": 0.3426,
+          "bpa": 0.3426,
+          "daWpa": 0.3426
+        },
+        "minFulfillment": {
+          "fcfs": 0,
+          "bpa": 0.3426,
+          "daWpa": 0.2556
+        },
+        "allocationEfficiency": {
+          "fcfs": 100,
+          "bpa": 100,
+          "daWpa": 100
+        },
+        "unmetDemand": {
+          "fcfs": 479.7,
+          "bpa": 479.7,
+          "daWpa": 479.7001
+        },
+        "averageFulfillment": {
+          "fcfs": 0.3739,
+          "bpa": 0.3426,
+          "daWpa": 0.3515
+        },
+        "totalAllocatedKwh": {
+          "fcfs": 250,
+          "bpa": 250,
+          "daWpa": 249.9999
+        },
+        "runtimeMs": {
+          "fcfs": 0.0273,
+          "bpa": 0.0349,
+          "daWpa": 0.0454
+        }
+      }
+    },
+    {
+      "scenarioId": "SCENARIO_2_HIGH_SUPPLY_LOW_DEMAND",
+      "scenarioName": "Scenario 2: High Energy Supply & Low Demand (Abundance Surplus)",
+      "description": "Supply is abundant at 1,200 kWh while 6 consumers demand only 450 kWh (Surplus Ratio: 2.67x).",
+      "type": "STANDARD_COMPARISON",
+      "totalSupplyKwh": 1200,
+      "totalDemandKwh": 412.5,
+      "consumerCount": 6,
+      "metrics": {
+        "jainsIndex": {
+          "fcfs": 1,
+          "bpa": 1,
+          "daWpa": 1
+        },
+        "overallFulfillment": {
+          "fcfs": 1,
+          "bpa": 1,
+          "daWpa": 1
+        },
+        "minFulfillment": {
+          "fcfs": 1,
+          "bpa": 1,
+          "daWpa": 1
+        },
+        "allocationEfficiency": {
+          "fcfs": 34.37,
+          "bpa": 34.37,
+          "daWpa": 34.37
+        },
+        "unmetDemand": {
+          "fcfs": 0,
+          "bpa": 0,
+          "daWpa": 0
+        },
+        "averageFulfillment": {
+          "fcfs": 1,
+          "bpa": 1,
+          "daWpa": 1
+        },
+        "totalAllocatedKwh": {
+          "fcfs": 412.5,
+          "bpa": 412.5,
+          "daWpa": 412.5
+        },
+        "runtimeMs": {
+          "fcfs": 0.0294,
+          "bpa": 0.0222,
+          "daWpa": 0.014
+        }
+      }
+    },
+    {
+      "scenarioId": "SCENARIO_3_BALANCED_SUPPLY_DEMAND",
+      "scenarioName": "Scenario 3: Balanced Supply & Demand (Grid Equilibrium)",
+      "description": "Aggregate supply of 500 kWh closely mirrors total consumer demand of ~500 kWh.",
+      "type": "STANDARD_COMPARISON",
+      "totalSupplyKwh": 500,
+      "totalDemandKwh": 511.5,
+      "consumerCount": 7,
+      "metrics": {
+        "jainsIndex": {
+          "fcfs": 0.9954,
+          "bpa": 1,
+          "daWpa": 0.9994
+        },
+        "overallFulfillment": {
+          "fcfs": 0.9775,
+          "bpa": 0.9775,
+          "daWpa": 0.9775
+        },
+        "minFulfillment": {
+          "fcfs": 0.8115,
+          "bpa": 0.9775,
+          "daWpa": 0.9521
+        },
+        "allocationEfficiency": {
+          "fcfs": 100,
+          "bpa": 100,
+          "daWpa": 100
+        },
+        "unmetDemand": {
+          "fcfs": 11.5,
+          "bpa": 11.5,
+          "daWpa": 11.5
+        },
+        "averageFulfillment": {
+          "fcfs": 0.9731,
+          "bpa": 0.9775,
+          "daWpa": 0.9795
+        },
+        "totalAllocatedKwh": {
+          "fcfs": 500,
+          "bpa": 500,
+          "daWpa": 500
+        },
+        "runtimeMs": {
+          "fcfs": 0.035,
+          "bpa": 0.028,
+          "daWpa": 0.0495
+        }
+      }
+    },
+    {
+      "scenarioId": "SCENARIO_4_EQUAL_CONSUMER_DEMANDS",
+      "scenarioName": "Scenario 4: Equal Consumer Demands (Homogeneous)",
+      "description": "10 consumers all request an identical 60 kWh with varied priority tiers under 400 kWh total supply.",
+      "type": "STANDARD_COMPARISON",
+      "totalSupplyKwh": 400,
+      "totalDemandKwh": 600,
+      "consumerCount": 10,
+      "metrics": {
+        "jainsIndex": {
+          "fcfs": 0.6897,
+          "bpa": 1,
+          "daWpa": 0.9228
+        },
+        "overallFulfillment": {
+          "fcfs": 0.6667,
+          "bpa": 0.6667,
+          "daWpa": 0.6667
+        },
+        "minFulfillment": {
+          "fcfs": 0,
+          "bpa": 0.6667,
+          "daWpa": 0.4938
+        },
+        "allocationEfficiency": {
+          "fcfs": 100,
+          "bpa": 100,
+          "daWpa": 100
+        },
+        "unmetDemand": {
+          "fcfs": 200,
+          "bpa": 200,
+          "daWpa": 200.0002
+        },
+        "averageFulfillment": {
+          "fcfs": 0.6667,
+          "bpa": 0.6667,
+          "daWpa": 0.6667
+        },
+        "totalAllocatedKwh": {
+          "fcfs": 400,
+          "bpa": 400,
+          "daWpa": 399.9998
+        },
+        "runtimeMs": {
+          "fcfs": 0.0485,
+          "bpa": 0.0253,
+          "daWpa": 0.0517
+        }
+      }
+    },
+    {
+      "scenarioId": "SCENARIO_5_HIGHLY_UNEQUAL_DEMANDS",
+      "scenarioName": "Scenario 5: Highly Unequal Consumer Demands (Disparate)",
+      "description": "Demands range from 15 kWh to 280 kWh (Large Hospital vs Small Home) under 500 kWh supply.",
+      "type": "STANDARD_COMPARISON",
+      "totalSupplyKwh": 500,
+      "totalDemandKwh": 685,
+      "consumerCount": 8,
+      "metrics": {
+        "jainsIndex": {
+          "fcfs": 0.3399,
+          "bpa": 1,
+          "daWpa": 0.9209
+        },
+        "overallFulfillment": {
+          "fcfs": 0.7299,
+          "bpa": 0.7299,
+          "daWpa": 0.7299
+        },
+        "minFulfillment": {
+          "fcfs": 0,
+          "bpa": 0.7299,
+          "daWpa": 0.4739
+        },
+        "allocationEfficiency": {
+          "fcfs": 100,
+          "bpa": 100,
+          "daWpa": 100
+        },
+        "unmetDemand": {
+          "fcfs": 185,
+          "bpa": 185,
+          "daWpa": 185.0001
+        },
+        "averageFulfillment": {
+          "fcfs": 0.3055,
+          "bpa": 0.7299,
+          "daWpa": 0.5628
+        },
+        "totalAllocatedKwh": {
+          "fcfs": 500,
+          "bpa": 500,
+          "daWpa": 499.9999
+        },
+        "runtimeMs": {
+          "fcfs": 0.0249,
+          "bpa": 0.0579,
+          "daWpa": 0.0198
+        }
+      }
+    },
+    {
+      "scenarioId": "SCENARIO_6_EXTREME_PRIORITY_WEIGHTS",
+      "scenarioName": "Scenario 6: Different Priority Weight Configurations",
+      "description": "Evaluates algorithm sensitivity with extreme priority weighting (Critical 5.0x vs Standard 1.0x).",
+      "type": "STANDARD_COMPARISON",
+      "totalSupplyKwh": 350,
+      "totalDemandKwh": 576.2,
+      "consumerCount": 8,
+      "metrics": {
+        "jainsIndex": {
+          "fcfs": 0.6021,
+          "bpa": 1,
+          "daWpa": 0.7776
+        },
+        "overallFulfillment": {
+          "fcfs": 0.6074,
+          "bpa": 0.6074,
+          "daWpa": 0.6074
+        },
+        "minFulfillment": {
+          "fcfs": 0,
+          "bpa": 0.6074,
+          "daWpa": 0.1562
+        },
+        "allocationEfficiency": {
+          "fcfs": 100,
+          "bpa": 100,
+          "daWpa": 100
+        },
+        "unmetDemand": {
+          "fcfs": 226.2,
+          "bpa": 226.2,
+          "daWpa": 226.2
+        },
+        "averageFulfillment": {
+          "fcfs": 0.5695,
+          "bpa": 0.6074,
+          "daWpa": 0.57
+        },
+        "totalAllocatedKwh": {
+          "fcfs": 350,
+          "bpa": 350,
+          "daWpa": 350
+        },
+        "runtimeMs": {
+          "fcfs": 0.0187,
+          "bpa": 0.0252,
+          "daWpa": 0.0508
+        }
+      }
+    },
+    {
+      "scenarioId": "SCENARIO_7_SCALABILITY_CONSUMERS",
+      "scenarioName": "Scenario 7: Increasing Consumer Population (Scalability)",
+      "type": "CONSUMER_SCALABILITY",
+      "data": [
+        {
+          "consumerCount": 10,
+          "totalSupplyKwh": 400,
+          "totalDemandKwh": 647.5999999999999,
+          "runtimeMs": {
+            "fcfs": 0.0363,
+            "bpa": 0.0258,
+            "daWpa": 0.0451
+          },
+          "jainsIndex": {
+            "fcfs": 0.5966,
+            "bpa": 1,
+            "daWpa": 0.9375
+          },
+          "minFulfillment": {
+            "fcfs": 0,
+            "bpa": 0.6177,
+            "daWpa": 0.4019
+          }
+        },
+        {
+          "consumerCount": 25,
+          "totalSupplyKwh": 1000,
+          "totalDemandKwh": 1414.1999999999998,
+          "runtimeMs": {
+            "fcfs": 0.0579,
+            "bpa": 0.1204,
+            "daWpa": 0.0579
+          },
+          "jainsIndex": {
+            "fcfs": 0.7019,
+            "bpa": 1,
+            "daWpa": 0.9282
+          },
+          "minFulfillment": {
+            "fcfs": 0,
+            "bpa": 0.7071,
+            "daWpa": 0.4899
+          }
+        },
+        {
+          "consumerCount": 50,
+          "totalSupplyKwh": 2000,
+          "totalDemandKwh": 2778.5999999999995,
+          "runtimeMs": {
+            "fcfs": 0.2009,
+            "bpa": 0.1884,
+            "daWpa": 0.1735
+          },
+          "jainsIndex": {
+            "fcfs": 0.6981,
+            "bpa": 1,
+            "daWpa": 0.9309
+          },
+          "minFulfillment": {
+            "fcfs": 0,
+            "bpa": 0.7198,
+            "daWpa": 0.4812
+          }
+        },
+        {
+          "consumerCount": 100,
+          "totalSupplyKwh": 4000,
+          "totalDemandKwh": 5820.599999999998,
+          "runtimeMs": {
+            "fcfs": 0.2351,
+            "bpa": 0.3302,
+            "daWpa": 0.3145
+          },
+          "jainsIndex": {
+            "fcfs": 0.6806,
+            "bpa": 1,
+            "daWpa": 0.9317
+          },
+          "minFulfillment": {
+            "fcfs": 0,
+            "bpa": 0.6872,
+            "daWpa": 0.4576
+          }
+        },
+        {
+          "consumerCount": 200,
+          "totalSupplyKwh": 8000,
+          "totalDemandKwh": 11203.099999999997,
+          "runtimeMs": {
+            "fcfs": 0.5998,
+            "bpa": 0.578,
+            "daWpa": 0.6039
+          },
+          "jainsIndex": {
+            "fcfs": 0.7061,
+            "bpa": 1,
+            "daWpa": 0.931
+          },
+          "minFulfillment": {
+            "fcfs": 0,
+            "bpa": 0.7141,
+            "daWpa": 0.4723
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "SCENARIO_8_SCALABILITY_LISTINGS",
+      "scenarioName": "Scenario 8: Increasing Producer Listing Count (Scalability)",
+      "type": "LISTING_SCALABILITY",
+      "data": [
+        {
+          "listingsCount": 5,
+          "consumersCount": 100,
+          "runtimeMs": 0.3065,
+          "matchedTradesCount": 0,
+          "totalMatchedKwh": 500
+        },
+        {
+          "listingsCount": 10,
+          "consumersCount": 100,
+          "runtimeMs": 0.4302,
+          "matchedTradesCount": 0,
+          "totalMatchedKwh": 1000
+        },
+        {
+          "listingsCount": 20,
+          "consumersCount": 100,
+          "runtimeMs": 0.7299,
+          "matchedTradesCount": 0,
+          "totalMatchedKwh": 2000
+        },
+        {
+          "listingsCount": 35,
+          "consumersCount": 100,
+          "runtimeMs": 0.8155,
+          "matchedTradesCount": 0,
+          "totalMatchedKwh": 3500
+        },
+        {
+          "listingsCount": 50,
+          "consumersCount": 100,
+          "runtimeMs": 0.9434,
+          "matchedTradesCount": 0,
+          "totalMatchedKwh": 3500
+        }
+      ]
+    }
+  ],
+  "executedAt": "2026-11-17T06:55:49.192Z"
+}

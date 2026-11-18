@@ -34,7 +34,9 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
+      const apiUrl = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+        ? "http://localhost:5000/api/v1"
+        : (process.env.NEXT_PUBLIC_API_URL || "https://l19idchgw6.execute-api.ap-southeast-2.amazonaws.com/api/v1");
       const res = await fetch(`${apiUrl}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -47,9 +49,11 @@ export default function LoginPage() {
         throw new Error(data.error || "Invalid email or password.");
       }
 
-      // Store token
+      // Store tokens and user profile under both keys for universal compatibility
+      localStorage.setItem("greenledger_auth_token", data.token);
       localStorage.setItem("greenledger_jwt", data.token);
       localStorage.setItem("greenledger_user", JSON.stringify(data.user));
+      localStorage.setItem("user", JSON.stringify(data.user));
 
       setRole(data.user.role);
       addToast({
@@ -81,7 +85,9 @@ export default function LoginPage() {
 
       if (!targetAddress) return;
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
+      const apiUrl = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+        ? "http://localhost:5000/api/v1"
+        : (process.env.NEXT_PUBLIC_API_URL || "https://l19idchgw6.execute-api.ap-southeast-2.amazonaws.com/api/v1");
 
       // 1. Request nonce
       const nonceRes = await fetch(`${apiUrl}/auth/nonce`, {
@@ -222,6 +228,45 @@ export default function LoginPage() {
               >
                 Sign In with Ethereum Wallet
               </Button>
+
+              {/* 1-Click Demo Accounts */}
+              <div className="mt-4 p-3 rounded-2xl bg-navy-50 dark:bg-navy-900 border border-navy-200 dark:border-navy-800">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-navy-400 block mb-2 text-center">
+                  Quick Demo Access (Pass: Password123!)
+                </span>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail("producer.solarfarm@greenledger.io");
+                      setPassword("Password123!");
+                    }}
+                    className="px-2 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-navy-800 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition cursor-pointer"
+                  >
+                    Producer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail("consumer.datacenter@ecotech.com");
+                      setPassword("Password123!");
+                    }}
+                    className="px-2 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-navy-800 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-800/60 hover:bg-sky-50 dark:hover:bg-sky-950/40 transition cursor-pointer"
+                  >
+                    Consumer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail("admin@greenledger.io");
+                      setPassword("Password123!");
+                    }}
+                    className="px-2 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-navy-800 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800/60 hover:bg-purple-50 dark:hover:bg-purple-950/40 transition cursor-pointer"
+                  >
+                    Admin
+                  </button>
+                </div>
+              </div>
             </form>
           </div>
         </div>

@@ -122,7 +122,9 @@ export default function MarketplacePage() {
   // Handle Request Energy Button Click
   const handleRequestEnergy = (listingId: number) => {
     // Check authentication
-    const token = typeof window !== "undefined" ? localStorage.getItem("greenledger_auth_token") : null;
+    const token = typeof window !== "undefined"
+      ? (localStorage.getItem("greenledger_auth_token") || localStorage.getItem("greenledger_jwt"))
+      : null;
     if (!token) {
       addToast({
         type: "warning",

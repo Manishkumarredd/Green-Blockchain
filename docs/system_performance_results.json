@@ -1,0 +1,48 @@
+{
+  "apiLatencies": {
+    "health": {
+      "url": "https://l19idchgw6.execute-api.ap-southeast-2.amazonaws.com/api/v1/health",
+      "iterations": 10,
+      "avgMs": 598.49,
+      "minMs": 271.05,
+      "maxMs": 2677.51,
+      "p95Ms": 2677.51
+    },
+    "marketplaceListings": {
+      "url": "https://l19idchgw6.execute-api.ap-southeast-2.amazonaws.com/api/v1/marketplace/listings",
+      "iterations": 10,
+      "avgMs": 324.49,
+      "minMs": 273.46,
+      "maxMs": 475.08,
+      "p95Ms": 475.08
+    },
+    "blockchainContracts": {
+      "url": "https://l19idchgw6.execute-api.ap-southeast-2.amazonaws.com/api/v1/blockchain/contracts",
+      "iterations": 10,
+      "avgMs": 273.02,
+      "minMs": 262.79,
+      "maxMs": 283.73,
+      "p95Ms": 283.73
+    },
+    "certificateVerification": {
+      "url": "https://l19idchgw6.execute-api.ap-southeast-2.amazonaws.com/api/v1/blockchain/certificates/1/verify",
+      "iterations": 10,
+      "avgMs": 459.12,
+      "minMs": 416.91,
+      "maxMs": 609.54,
+      "p95Ms": 609.54
+    }
+  },
+  "databasePerformance": {
+    "selectListingsAvgMs": 459.48,
+    "complexJoinAvgMs": 414.71,
+    "explainAnalyze": [
+      "Seq Scan on energy_listings  (cost=0.00..13.75 rows=2 width=242) (actual time=0.013..0.014 rows=4.00 loops=1)",
+      "  Filter: ((listing_status)::text = 'ACTIVE'::text)",
+      "  Buffers: shared hit=1",
+      "Planning Time: 0.062 ms",
+      "Execution Time: 0.040 ms"
+    ]
+  },
+  "evaluatedAt": "2026-11-17T06:57:43.003Z"
+}

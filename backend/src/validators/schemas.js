@@ -9,7 +9,7 @@ const registerSchema = z.object({
   role: z.enum(["PRODUCER", "CONSUMER"], {
     errorMap: () => ({ message: "Role must be either PRODUCER or CONSUMER" }),
   }),
-  meterId: z.string().min(3, "Meter ID must be at least 3 characters"),
+  meterId: z.string().min(3, "Meter ID must be at least 3 characters").optional(),
   walletAddress: z
     .string()
     .regex(/^0x[a-fA-F0-9]{40}$/, "Invalid Ethereum wallet address format")

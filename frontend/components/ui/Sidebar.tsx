@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
@@ -19,9 +19,11 @@ import {
   ChevronRight,
   ShieldAlert,
   Zap,
+  LogOut,
 } from "lucide-react";
 import { useApp, UserRole } from "../common/AppContext";
 import { Logo } from "./Logo";
+import { authApi } from "../../services/api";
 
 export interface NavItem {
   id: string;
@@ -35,12 +37,53 @@ export const Sidebar: React.FC<{ activeNavId?: string; onNavSelect?: (id: string
   onNavSelect,
 }) => {
   const router = useRouter();
-  const { role, setRole, sidebarOpen, setSidebarOpen } = useApp();
+  const { role, setRole, sidebarOpen, setSidebarOpen, addToast } = useApp();
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  useEffect(() => {
+    try {
+      const stored = typeof window !== "undefined"
+        ? (localStorage.getItem("greenledger_user") || localStorage.getItem("user"))
+        : null;
+      if (stored) {
+        setCurrentUser(JSON.parse(stored));
+      }
+    } catch (_) {}
+  }, [role]);
+
+  const handleRoleChange = async (targetRole: UserRole) => {
+    setRole(targetRole);
+    try {
+      await authApi.switchDemoRole(targetRole);
+      const stored = typeof window !== "undefined"
+        ? (localStorage.getItem("greenledger_user") || localStorage.getItem("user"))
+        : null;
+      if (stored) {
+        setCurrentUser(JSON.parse(stored));
+      }
+    } catch (_) {}
+    router.push(`/${targetRole.toLowerCase()}/dashboard`);
+  };
+
+  const handleLogout = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("greenledger_auth_token");
+      localStorage.removeItem("greenledger_jwt");
+      localStorage.removeItem("greenledger_user");
+      localStorage.removeItem("user");
+    }
+    addToast({
+      type: "info",
+      title: "Logged Out",
+      description: "You have securely signed out of GreenLedger.",
+    });
+    router.push("/login");
+  };
 
   const producerNav: NavItem[] = [
     { id: "overview", label: "Producer Hub", icon: LayoutDashboard },
     { id: "telemetry", label: "Generation Feeds", icon: Activity, badge: "Live" },
-    { id: "listings", label: "Energy Listings", icon: PlusCircle, badge: 3 },
+    { id: "listings", label: "Energy Listings", icon: PlusCircle, badge: "P2P" },
     { id: "settlements", label: "Settlement Payouts", icon: Coins },
     { id: "settings", label: "Microgrid Settings", icon: Settings },
   ];
@@ -55,11 +98,11 @@ export const Sidebar: React.FC<{ activeNavId?: string; onNavSelect?: (id: string
 
   const adminNav: NavItem[] = [
     { id: "overview", label: "Platform Overview", icon: LayoutDashboard },
-    { id: "users", label: "User Management", icon: Users },
-    { id: "listings", label: "Energy Listings", icon: ShoppingBag },
-    { id: "requests", label: "Energy Demands", icon: Sliders },
+    { id: "users", label: "User Governance", icon: Users },
+    { id: "listings", label: "Listing Surveillance", icon: PlusCircle },
+    { id: "requests", label: "Demand Queue", icon: Sliders },
     { id: "transactions", label: "P2P Transactions", icon: Coins },
-    { id: "algorithms", label: "Research Algorithms", icon: Scale, badge: "Phase 7" },
+    { id: "algorithms", label: "Research Algorithms", icon: Scale, badge: "DA-WPA" },
     { id: "research", label: "Research Analytics", icon: TrendingUp, badge: "Empirical" },
     { id: "settings", label: "Platform Settings", icon: Settings },
     { id: "audit", label: "Activity Logs & Audit", icon: FileText },
@@ -72,6 +115,19 @@ export const Sidebar: React.FC<{ activeNavId?: string; onNavSelect?: (id: string
     CONSUMER: { label: "Consumer Portal", color: "text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/40" },
     ADMIN: { label: "Administrator", color: "text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40" },
   }[role];
+
+  const displayName = currentUser?.name || currentUser?.fullName || (
+    role === "PRODUCER" ? "Helios Solar Park" : role === "CONSUMER" ? "EcoCloud Data Center" : "Platform Admin"
+  );
+  const displayMeter = currentUser?.meterId || currentUser?.meter_id || (
+    role === "PRODUCER" ? "METER-PROD-SOL-101" : role === "CONSUMER" ? "METER-CONS-DAT-501" : "METER-ADMIN-000"
+  );
+  const initials = displayName
+    .split(" ")
+    .map((n: string) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <>
@@ -104,10 +160,7 @@ export const Sidebar: React.FC<{ activeNavId?: string; onNavSelect?: (id: string
               {(["PRODUCER", "CONSUMER", "ADMIN"] as UserRole[]).map((r) => (
                 <button
                   key={r}
-                  onClick={() => {
-                    setRole(r);
-                    router.push(`/${r.toLowerCase()}/dashboard`);
-                  }}
+                  onClick={() => handleRoleChange(r)}
                   className={`py-1 text-[11px] font-bold rounded-lg transition cursor-pointer ${
                     role === r
                       ? "bg-white dark:bg-navy-900 text-brand-600 dark:text-brand-400 shadow-sm"
@@ -163,20 +216,30 @@ export const Sidebar: React.FC<{ activeNavId?: string; onNavSelect?: (id: string
           </nav>
         </div>
 
-        {/* User / Meter Profile Footer */}
+        {/* User / Meter Profile Footer with Logout */}
         <div className="p-4 border-t border-navy-100 dark:border-navy-800 bg-navy-50/50 dark:bg-navy-950/40">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-brand-600 text-white flex items-center justify-center font-bold text-sm shadow-sm flex-shrink-0">
-              {role === "PRODUCER" ? "HP" : role === "CONSUMER" ? "MH" : "AD"}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-brand-600 text-white flex items-center justify-center font-bold text-sm shadow-sm flex-shrink-0">
+                {initials || "GL"}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-xs font-bold text-navy-900 dark:text-white truncate">
+                  {displayName}
+                </h4>
+                <p className="text-[11px] text-navy-400 dark:text-navy-500 truncate font-mono">
+                  {displayMeter}
+                </p>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <h4 className="text-xs font-bold text-navy-900 dark:text-white truncate">
-                {role === "PRODUCER" ? "Helios Solar Park" : role === "CONSUMER" ? "Metro Hospital" : "Grid Admin"}
-              </h4>
-              <p className="text-[11px] text-navy-400 dark:text-navy-500 truncate font-mono">
-                {role === "PRODUCER" ? "METER-SOL-101" : role === "CONSUMER" ? "METER-HOS-502" : "METER-ADM-000"}
-              </p>
-            </div>
+
+            <button
+              onClick={handleLogout}
+              className="p-2 text-navy-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/50 transition cursor-pointer flex-shrink-0"
+              title="Sign Out of Session"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </aside>

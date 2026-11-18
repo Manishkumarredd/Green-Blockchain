@@ -31,7 +31,6 @@ contract GreenCertificate is ERC721URIStorage, Ownable {
 
     // Mapping from tokenId to Certificate metadata
     mapping(uint256 => CertificateData) private _certificates;
-
     // Mapping from tradeHash to tokenId to strictly prevent double-issuance
     mapping(bytes32 => uint256) public tradeHashToTokenId;
 

@@ -1,29 +1,15 @@
 "use client";
 
 import React, { useState } from "react";
-import { AppProvider, useApp } from "../components/common/AppContext";
+import { useApp } from "../components/common/AppContext";
 import { PublicLayout } from "../components/layout/PublicLayout";
-import { AuthLayout } from "../components/layout/AuthLayout";
 import { DashboardLayout } from "../components/layout/DashboardLayout";
 import { PublicLandingView } from "../components/views/PublicLandingView";
-import { DashboardView } from "../components/views/DashboardView";
 import { ShowroomView } from "../components/views/ShowroomView";
 
-function MainContent() {
+export default function Home() {
   const { activeView } = useApp();
   const [activeNavId, setActiveNavId] = useState("overview");
-
-  if (activeView === "landing") {
-    return (
-      <PublicLayout>
-        <PublicLandingView />
-      </PublicLayout>
-    );
-  }
-
-  if (activeView === "auth") {
-    return <AuthLayout />;
-  }
 
   if (activeView === "showroom") {
     return (
@@ -33,14 +19,9 @@ function MainContent() {
     );
   }
 
-  // Default: Dashboard View
   return (
-    <DashboardLayout activeNavId={activeNavId} onNavSelect={setActiveNavId}>
-      <DashboardView />
-    </DashboardLayout>
+    <PublicLayout>
+      <PublicLandingView />
+    </PublicLayout>
   );
-}
-
-export default function Home() {
-  return <MainContent />;
 }

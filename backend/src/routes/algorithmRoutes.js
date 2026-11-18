@@ -13,9 +13,10 @@ router.get("/compare", algorithmController.compare);
 router.get("/results/:id", algorithmController.getResultById);
 router.get("/metrics/:id", algorithmController.getMetricsById);
 
-// Admin-only operations for executing matching, global allocation, and experiments
+// Operations for executing matching and global allocation (Admin-only for live DB state updates)
 router.post("/match", requireRoles("ADMIN"), algorithmController.match);
 router.post("/allocate", requireRoles("ADMIN"), algorithmController.allocate);
-router.post("/experiments/run", requireRoles("ADMIN"), algorithmController.runExperiment);
+// Experiment simulations: accessible to all verified roles for research benchmarking
+router.post("/experiments/run", requireRoles("ADMIN", "PRODUCER", "CONSUMER"), algorithmController.runExperiment);
 
 module.exports = router;

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import {
   Zap,
   ShieldCheck,
@@ -53,25 +54,24 @@ export const PublicLandingView: React.FC = () => {
 
         {/* CTA Buttons */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-          <Button
-            variant="primary"
-            size="lg"
-            rightIcon={<ArrowRight className="w-5 h-5" />}
-            onClick={() => {
-              setRole("CONSUMER");
-              setActiveView("dashboard");
-            }}
-          >
-            Explore Marketplace
-          </Button>
+          <Link href="/marketplace">
+            <Button
+              variant="primary"
+              size="lg"
+              rightIcon={<ArrowRight className="w-5 h-5" />}
+            >
+              Explore Marketplace
+            </Button>
+          </Link>
 
-          <Button
-            variant="secondary"
-            size="lg"
-            onClick={() => setActiveView("auth")}
-          >
-            Get Started
-          </Button>
+          <Link href="/register">
+            <Button
+              variant="secondary"
+              size="lg"
+            >
+              Get Started
+            </Button>
+          </Link>
         </div>
 
         {/* Hero Visual: Premium Dashboard & Energy Trading Analytics Preview */}
@@ -506,29 +506,25 @@ export const PublicLandingView: React.FC = () => {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
-            <Button
-              variant="primary"
-              size="lg"
-              className="bg-white text-brand-900 hover:bg-brand-50 hover:text-brand-950 font-bold"
-              onClick={() => {
-                setRole("PRODUCER");
-                setActiveView("auth");
-              }}
-            >
-              Join as Producer
-            </Button>
+            <Link href="/register?role=PRODUCER">
+              <Button
+                variant="primary"
+                size="lg"
+                className="bg-white text-brand-900 hover:bg-brand-50 hover:text-brand-950 font-bold"
+              >
+                Join as Producer
+              </Button>
+            </Link>
 
-            <Button
-              variant="outline"
-              size="lg"
-              className="text-white border-white hover:bg-white/10"
-              onClick={() => {
-                setRole("CONSUMER");
-                setActiveView("auth");
-              }}
-            >
-              Join as Consumer
-            </Button>
+            <Link href="/register?role=CONSUMER">
+              <Button
+                variant="outline"
+                size="lg"
+                className="text-white border-white hover:bg-white/10"
+              >
+                Join as Consumer
+              </Button>
+            </Link>
           </div>
         </div>
       </section>

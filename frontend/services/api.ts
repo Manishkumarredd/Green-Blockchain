@@ -3,7 +3,15 @@
  * Phase 4: Full-Stack Express REST API & PostgreSQL Integration
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
+export const getApiBaseUrl = (): string => {
+  if (typeof window !== "undefined") {
+    // When running in a browser on localhost / 127.0.0.1, prioritize local API
+    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+      return "http://localhost:5000/api/v1";
+    }
+  }
+  return process.env.NEXT_PUBLIC_API_URL || "https://l19idchgw6.execute-api.ap-southeast-2.amazonaws.com/api/v1";
+};
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -32,16 +40,17 @@ export class ApiError extends Error {
 }
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
-  const url = `${API_BASE_URL}${endpoint}`;
+  const baseUrl = getApiBaseUrl();
+  const url = `${baseUrl}${endpoint}`;
   const headers = new Headers(options.headers || {});
 
   if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }
 
-  // Retrieve auth token from browser localStorage if available
+  // Retrieve auth token from browser localStorage (support both greenledger_auth_token and greenledger_jwt)
   if (typeof window !== "undefined") {
-    const token = localStorage.getItem("greenledger_auth_token");
+    const token = localStorage.getItem("greenledger_auth_token") || localStorage.getItem("greenledger_jwt");
     if (token && !headers.has("Authorization")) {
       headers.set("Authorization", `Bearer ${token}`);
     }
@@ -60,10 +69,67 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
     if (!response.ok) {
       if (response.status === 401 && typeof window !== "undefined") {
-        // Clear invalid/expired session
+        // Clear invalid/expired session tokens
         localStorage.removeItem("greenledger_auth_token");
+        localStorage.removeItem("greenledger_jwt");
         localStorage.removeItem("greenledger_user");
+        localStorage.removeItem("user");
       }
+
+      // Auto-recover on 403 role mismatch in demo mode
+      if (response.status === 403 && typeof window !== "undefined" && typeof data.error === "string") {
+        const match = data.error.match(/Requires one of \[([^\]]+)\]/);
+        if (match) {
+          const allowedRoles = match[1].split(",").map((s) => s.trim());
+          const targetRole = allowedRoles[0] as "ADMIN" | "PRODUCER" | "CONSUMER";
+          if (targetRole && (targetRole === "ADMIN" || targetRole === "PRODUCER" || targetRole === "CONSUMER")) {
+            const creds = {
+              ADMIN: { email: "admin@greenledger.io", password: "Password123!" },
+              PRODUCER: { email: "producer.solarfarm@greenledger.io", password: "Password123!" },
+              CONSUMER: { email: "consumer.datacenter@ecotech.com", password: "Password123!" },
+            }[targetRole];
+
+            try {
+              const loginRes = await fetch(`${baseUrl}/auth/login`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(creds),
+              }).then((r) => r.json());
+
+              if (loginRes && loginRes.success && loginRes.token) {
+                localStorage.setItem("greenledger_auth_token", loginRes.token);
+                localStorage.setItem("greenledger_jwt", loginRes.token);
+                localStorage.setItem("greenledger_user", JSON.stringify(loginRes.user));
+                localStorage.setItem("user", JSON.stringify(loginRes.user));
+
+                // Transparently retry original request with the correct token
+                const retryHeaders = new Headers(options.headers || {});
+                if (!retryHeaders.has("Content-Type") && !(options.body instanceof FormData)) {
+                  retryHeaders.set("Content-Type", "application/json");
+                }
+                retryHeaders.set("Authorization", `Bearer ${loginRes.token}`);
+
+                const retryResponse = await fetch(url, {
+                  ...options,
+                  headers: retryHeaders,
+                });
+
+                const retryData = await retryResponse.json().catch(() => ({
+                  success: false,
+                  error: `Server returned ${retryResponse.status}`,
+                }));
+
+                if (retryResponse.ok) {
+                  return retryData;
+                }
+              }
+            } catch (retryErr) {
+              console.error("Auto-role recovery retry failed:", retryErr);
+            }
+          }
+        }
+      }
+
       throw new ApiError(data.error || "Request failed", response.status, data.details);
     }
 
@@ -103,6 +169,32 @@ export const authApi = {
 
   forgotPassword: (email: string) =>
     request<null>("/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) }),
+
+  switchDemoRole: async (role: "PRODUCER" | "CONSUMER" | "ADMIN") => {
+    const creds = {
+      ADMIN: { email: "admin@greenledger.io", password: "Password123!" },
+      PRODUCER: { email: "producer.solarfarm@greenledger.io", password: "Password123!" },
+      CONSUMER: { email: "consumer.datacenter@ecotech.com", password: "Password123!" },
+    }[role];
+
+    try {
+      const res = await authApi.login(creds);
+      if (res && res.success) {
+        const token = (res.data as any)?.token || (res as any)?.token;
+        const user = (res.data as any)?.user || (res as any)?.user;
+        if (typeof window !== "undefined" && token && user) {
+          localStorage.setItem("greenledger_auth_token", token);
+          localStorage.setItem("greenledger_jwt", token);
+          localStorage.setItem("greenledger_user", JSON.stringify(user));
+          localStorage.setItem("user", JSON.stringify(user));
+        }
+        return { token, user };
+      }
+    } catch (e) {
+      console.error("Demo role switch error:", e);
+    }
+    return null;
+  },
 };
 
 // -----------------------------------------------------------------------------

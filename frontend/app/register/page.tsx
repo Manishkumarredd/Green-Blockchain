@@ -75,7 +75,9 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
+      const apiUrl = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+        ? "http://localhost:5000/api/v1"
+        : (process.env.NEXT_PUBLIC_API_URL || "https://l19idchgw6.execute-api.ap-southeast-2.amazonaws.com/api/v1");
       const res = await fetch(`${apiUrl}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -95,9 +97,11 @@ export default function RegisterPage() {
         throw new Error(data.error || "Registration failed.");
       }
 
-      // Store JWT
+      // Store tokens and user profile under both keys for universal compatibility
+      localStorage.setItem("greenledger_auth_token", data.token);
       localStorage.setItem("greenledger_jwt", data.token);
       localStorage.setItem("greenledger_user", JSON.stringify(data.user));
+      localStorage.setItem("user", JSON.stringify(data.user));
 
       setRole(selectedRole);
       addToast({
