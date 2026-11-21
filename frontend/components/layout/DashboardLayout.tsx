@@ -21,29 +21,65 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 }) => {
   const router = useRouter();
   const pathname = usePathname();
-  const { role, setRole } = useApp();
+  const { role, setRole, addToast } = useApp();
 
   useEffect(() => {
-    let targetRole: "PRODUCER" | "CONSUMER" | "ADMIN" | null = null;
-    if (pathname?.startsWith("/admin")) targetRole = "ADMIN";
-    else if (pathname?.startsWith("/consumer")) targetRole = "CONSUMER";
-    else if (pathname?.startsWith("/producer")) targetRole = "PRODUCER";
+    if (typeof window === "undefined") return;
 
-    if (targetRole) {
-      if (role !== targetRole) {
-        setRole(targetRole);
-      }
-      try {
-        const stored = typeof window !== "undefined"
-          ? (localStorage.getItem("greenledger_user") || localStorage.getItem("user"))
-          : null;
-        const u = stored ? JSON.parse(stored) : null;
-        if (!u || u.role !== targetRole) {
-          authApi.switchDemoRole(targetRole);
-        }
-      } catch (_) {}
+    // Retrieve user and token from localStorage
+    const stored = localStorage.getItem("greenledger_user") || localStorage.getItem("user");
+    const token = localStorage.getItem("greenledger_auth_token") || localStorage.getItem("greenledger_jwt");
+
+    if (!stored || !token) {
+      router.push("/login");
+      return;
     }
-  }, [pathname, role, setRole]);
+
+    try {
+      const u = JSON.parse(stored);
+      const userRole = u.role as "PRODUCER" | "CONSUMER" | "ADMIN";
+
+      if (userRole && role !== userRole) {
+        setRole(userRole);
+      }
+
+      // Enforce strict Role-Based Access Control (RBAC)
+      if (pathname?.startsWith("/admin") && userRole !== "ADMIN") {
+        addToast({
+          type: "error",
+          title: "Access Restricted",
+          description: `Administrator privileges required. You are signed in as a ${userRole}.`,
+        });
+        const redirectPath = userRole === "PRODUCER" ? "/producer/dashboard" : "/consumer/dashboard";
+        router.push(redirectPath);
+        return;
+      }
+
+      if (pathname?.startsWith("/producer") && userRole !== "PRODUCER") {
+        addToast({
+          type: "error",
+          title: "Access Restricted",
+          description: `Producer portal is reserved for energy producers. You are signed in as a ${userRole}.`,
+        });
+        const redirectPath = userRole === "CONSUMER" ? "/consumer/dashboard" : "/admin/dashboard";
+        router.push(redirectPath);
+        return;
+      }
+
+      if (pathname?.startsWith("/consumer") && userRole !== "CONSUMER") {
+        addToast({
+          type: "error",
+          title: "Access Restricted",
+          description: `Consumer portal is reserved for energy consumers. You are signed in as a ${userRole}.`,
+        });
+        const redirectPath = userRole === "PRODUCER" ? "/producer/dashboard" : "/admin/dashboard";
+        router.push(redirectPath);
+        return;
+      }
+    } catch (_) {
+      router.push("/login");
+    }
+  }, [pathname, role, setRole, router, addToast]);
 
   const handleNavSelect = (navId: string) => {
     if (onNavSelect) {

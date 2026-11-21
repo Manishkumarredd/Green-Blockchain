@@ -25,6 +25,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { PublicLayout } from "../../../components/layout/PublicLayout";
+import { DashboardLayout } from "../../../components/layout/DashboardLayout";
 import { Card } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
@@ -45,6 +46,14 @@ export default function MarketplaceListingDetailsClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [listing, setListing] = useState<any>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const token = localStorage.getItem("greenledger_auth_token") || localStorage.getItem("greenledger_jwt");
+      setIsAuthenticated(Boolean(token));
+    }
+  }, []);
 
   // Purchase Request Form State
   const [orderQuantityKwh, setOrderQuantityKwh] = useState("50");
@@ -180,9 +189,12 @@ export default function MarketplaceListingDetailsClient() {
     }
   };
 
+  const Layout = isAuthenticated ? DashboardLayout : PublicLayout;
+  const layoutProps = isAuthenticated ? { activeNavId: "marketplace" } : {};
+
   if (loading) {
     return (
-      <PublicLayout>
+      <Layout {...layoutProps}>
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-6 animate-pulse">
           <div className="h-8 bg-navy-200 dark:bg-navy-800 rounded-lg w-1/4 mb-4" />
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -193,13 +205,13 @@ export default function MarketplaceListingDetailsClient() {
             <SkeletonCard />
           </div>
         </div>
-      </PublicLayout>
+      </Layout>
     );
   }
 
   if (error || !listing) {
     return (
-      <PublicLayout>
+      <Layout {...layoutProps}>
         <div className="max-w-3xl mx-auto px-4 py-16 text-center">
           <ErrorState
             title="Listing Not Found"
@@ -214,7 +226,7 @@ export default function MarketplaceListingDetailsClient() {
             </Link>
           </div>
         </div>
-      </PublicLayout>
+      </Layout>
     );
   }
 
@@ -249,7 +261,7 @@ export default function MarketplaceListingDetailsClient() {
   const SourceIcon = getSourceIcon(listing.energy_source);
 
   return (
-    <PublicLayout>
+    <Layout {...(isAuthenticated ? { activeNavId: "marketplace" } : {})}>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8 animate-fadeIn">
         {/* Navigation Breadcrumb */}
         <div className="flex items-center justify-between">
@@ -594,6 +606,6 @@ export default function MarketplaceListingDetailsClient() {
           </Modal>
         )}
       </div>
-    </PublicLayout>
+    </Layout>
   );
 }

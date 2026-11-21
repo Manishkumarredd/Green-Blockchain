@@ -5,6 +5,7 @@ import { Wallet, Copy, ExternalLink, LogOut, Check, AlertTriangle, RefreshCw } f
 import { useApp } from "../common/AppContext";
 import { useMetaMask } from "../../hooks/useMetaMask";
 import { Button } from "./Button";
+import { ConnectWalletModal } from "./ConnectWalletModal";
 
 export const WalletButton: React.FC = () => {
   const { addToast } = useApp();
@@ -20,6 +21,8 @@ export const WalletButton: React.FC = () => {
   } = useMetaMask();
 
   const [isOpen, setIsOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedWalletName, setSelectedWalletName] = useState<string>("MetaMask");
   const [copied, setCopied] = useState(false);
   const [switchingNetwork, setSwitchingNetwork] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -43,24 +46,28 @@ export const WalletButton: React.FC = () => {
     }
   };
 
-  const handleConnect = async () => {
-    if (!isInstalled) {
-      addToast({
-        type: "warning",
-        title: "MetaMask Not Found",
-        description: "Please install the MetaMask browser extension to connect your Web3 wallet.",
-      });
-      window.open("https://metamask.io/download/", "_blank");
-      return;
-    }
-    const connectedAddress = await connectWallet();
+  const handleWalletSelect = async (walletId: string) => {
+    const walletLabels: Record<string, string> = {
+      metamask: "MetaMask",
+      coinbase: "Coinbase Wallet",
+      rabby: "Rabby Wallet",
+      brave: "Brave Wallet",
+    };
+    setSelectedWalletName(walletLabels[walletId] || "Web3 Wallet");
+
+    const connectedAddress = await connectWallet(walletId);
     if (connectedAddress) {
+      setIsModalOpen(false);
       addToast({
         type: "success",
-        title: "Wallet Connected",
+        title: `${walletLabels[walletId] || "Wallet"} Connected`,
         description: `Connected: ${connectedAddress.slice(0, 6)}...${connectedAddress.slice(-4)}`,
       });
     }
+  };
+
+  const handleConnect = () => {
+    setIsModalOpen(true);
   };
 
   const handleSwitchNetwork = async () => {
@@ -87,15 +94,24 @@ export const WalletButton: React.FC = () => {
 
   if (!isConnected || !address) {
     return (
-      <Button
-        variant="primary"
-        size="sm"
-        leftIcon={<Wallet className="w-4 h-4" />}
-        isLoading={isConnecting}
-        onClick={handleConnect}
-      >
-        Connect Wallet
-      </Button>
+      <>
+        <Button
+          variant="primary"
+          size="sm"
+          leftIcon={<Wallet className="w-4 h-4" />}
+          isLoading={isConnecting}
+          onClick={handleConnect}
+        >
+          Connect Wallet
+        </Button>
+
+        <ConnectWalletModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onSelectWallet={handleWalletSelect}
+          isConnecting={isConnecting}
+        />
+      </>
     );
   }
 
@@ -116,6 +132,10 @@ export const WalletButton: React.FC = () => {
             isSepolia ? "bg-emerald-500" : "bg-amber-500"
           }`}
         />
+        <span className="font-bold text-[10px] text-brand-600 dark:text-brand-400 uppercase tracking-wider">
+          {selectedWalletName}
+        </span>
+        <span className="font-mono text-navy-400">|</span>
         <span className="font-mono">{truncated}</span>
         <span
           className={`hidden md:inline px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
@@ -132,9 +152,14 @@ export const WalletButton: React.FC = () => {
       {isOpen && (
         <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-navy-900 rounded-2xl border border-navy-200 dark:border-navy-800 shadow-2xl p-4 z-40 animate-in fade-in zoom-in-95 duration-150">
           <div className="flex items-center justify-between pb-3 border-b border-navy-100 dark:border-navy-800">
-            <span className="text-xs font-bold uppercase tracking-wider text-navy-400">
-              Web3 Account
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold uppercase tracking-wider text-navy-400">
+                Connected:
+              </span>
+              <span className="text-xs font-bold text-navy-950 dark:text-white">
+                {selectedWalletName}
+              </span>
+            </div>
             <span
               className={`inline-flex items-center gap-1 text-[11px] font-semibold ${
                 isSepolia
@@ -147,7 +172,7 @@ export const WalletButton: React.FC = () => {
                   isSepolia ? "bg-emerald-500" : "bg-amber-500"
                 }`}
               />
-              {isSepolia ? "Sepolia Active" : "Unsupported Network"}
+              {isSepolia ? "Active Network" : "Unsupported Network"}
             </span>
           </div>
 

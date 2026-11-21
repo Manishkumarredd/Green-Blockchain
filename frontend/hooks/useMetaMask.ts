@@ -4,6 +4,22 @@ import { useState, useEffect, useCallback } from "react";
 
 export const SEPOLIA_CHAIN_ID_HEX = "0xaa36a7"; // 11155111 in hex
 export const SEPOLIA_CHAIN_ID_DEC = 11155111;
+export const HARDHAT_CHAIN_ID_HEX = "0x7a69"; // 31337 in hex
+export const HARDHAT_CHAIN_ID_DEC = 31337;
+
+export function isSupportedChain(chainId: string | null): boolean {
+  if (!chainId) return false;
+  const dec = parseInt(chainId, 16);
+  const hex = chainId.toLowerCase();
+  return (
+    hex === SEPOLIA_CHAIN_ID_HEX ||
+    dec === SEPOLIA_CHAIN_ID_DEC ||
+    hex === HARDHAT_CHAIN_ID_HEX ||
+    dec === HARDHAT_CHAIN_ID_DEC ||
+    dec === 1337 ||
+    hex === "0x539"
+  );
+}
 
 export interface MetaMaskState {
   isInstalled: boolean;
@@ -38,20 +54,22 @@ export function useMetaMask() {
         isInstalled,
       }));
 
-      if (window.ethereum) {
+      const activeProvider: any = (window as any).rabby || window.ethereum;
+
+      if (activeProvider) {
         // Query existing connected accounts without prompting
-        window.ethereum
+        activeProvider
           .request({ method: "eth_accounts" })
-          .then((accounts: string[]) => {
+          .then(async (accounts: string[]) => {
             if (accounts && accounts.length > 0) {
               const address = accounts[0];
-              const chainId = window.ethereum.chainId;
+              const chainId = (await activeProvider.request({ method: "eth_chainId" }).catch(() => activeProvider.chainId)) as string;
               setState((prev) => ({
                 ...prev,
                 isConnected: true,
                 address,
                 chainId,
-                isSepolia: chainId === SEPOLIA_CHAIN_ID_HEX || parseInt(chainId, 16) === SEPOLIA_CHAIN_ID_DEC,
+                isSepolia: isSupportedChain(chainId),
               }));
             }
           })
@@ -76,7 +94,7 @@ export function useMetaMask() {
 
         // Listen for network / chain changes
         const handleChainChanged = (chainId: string) => {
-          const isSepolia = chainId === SEPOLIA_CHAIN_ID_HEX || parseInt(chainId, 16) === SEPOLIA_CHAIN_ID_DEC;
+          const isSepolia = isSupportedChain(chainId);
           setState((prev) => ({
             ...prev,
             chainId,
@@ -84,11 +102,13 @@ export function useMetaMask() {
           }));
         };
 
-        window.ethereum.on?.("accountsChanged", handleAccountsChanged);
-        window.ethereum.on?.("chainChanged", handleChainChanged);
+        activeProvider.on?.("accountsChanged", handleAccountsChanged);
+        activeProvider.on?.("chainChanged", handleChainChanged);
+        window.ethereum?.on?.("chainChanged", handleChainChanged);
 
         return () => {
-          window.ethereum?.removeListener?.("accountsChanged", handleAccountsChanged);
+          activeProvider.removeListener?.("accountsChanged", handleAccountsChanged);
+          activeProvider.removeListener?.("chainChanged", handleChainChanged);
           window.ethereum?.removeListener?.("chainChanged", handleChainChanged);
         };
       }
@@ -96,11 +116,38 @@ export function useMetaMask() {
   }, []);
 
   // Request connection
-  const connectWallet = useCallback(async (): Promise<string | null> => {
-    if (typeof window === "undefined" || !window.ethereum) {
+  const connectWallet = useCallback(async (preferredWallet?: string): Promise<string | null> => {
+    if (typeof window === "undefined") {
       setState((prev) => ({
         ...prev,
-        error: "MetaMask is not installed. Please install the MetaMask extension.",
+        error: "Web3 environment not available.",
+      }));
+      return null;
+    }
+
+    // Resolve specific wallet provider (MetaMask, Rabby, Coinbase)
+    let provider: any = (window as any).ethereum;
+    if (preferredWallet === "rabby" && (window as any).rabby) {
+      provider = (window as any).rabby;
+    } else if (preferredWallet === "coinbase" && (window as any).coinbaseWalletExtension) {
+      provider = (window as any).coinbaseWalletExtension;
+    } else if (provider?.providers && Array.isArray(provider.providers)) {
+      if (preferredWallet === "rabby") {
+        const found = provider.providers.find((p: any) => p.isRabby);
+        if (found) provider = found;
+      } else if (preferredWallet === "coinbase") {
+        const found = provider.providers.find((p: any) => p.isCoinbaseWallet);
+        if (found) provider = found;
+      } else if (preferredWallet === "metamask") {
+        const found = provider.providers.find((p: any) => p.isMetaMask && !p.isRabby);
+        if (found) provider = found;
+      }
+    }
+
+    if (!provider) {
+      setState((prev) => ({
+        ...prev,
+        error: "Selected Web3 wallet is not installed.",
       }));
       return null;
     }
@@ -108,7 +155,7 @@ export function useMetaMask() {
     setState((prev) => ({ ...prev, isConnecting: true, error: null }));
 
     try {
-      const accounts = (await window.ethereum.request({
+      const accounts = (await provider.request({
         method: "eth_requestAccounts",
       })) as string[];
 
@@ -117,8 +164,8 @@ export function useMetaMask() {
       }
 
       const address = accounts[0];
-      const chainId = (await window.ethereum.request({ method: "eth_chainId" })) as string;
-      const isSepolia = chainId === SEPOLIA_CHAIN_ID_HEX || parseInt(chainId, 16) === SEPOLIA_CHAIN_ID_DEC;
+      const chainId = (await provider.request({ method: "eth_chainId" })) as string;
+      const isSepolia = isSupportedChain(chainId);
 
       setState({
         isInstalled: true,
@@ -153,18 +200,19 @@ export function useMetaMask() {
 
   // Switch to Sepolia Testnet
   const switchToSepolia = useCallback(async (): Promise<boolean> => {
-    if (!window.ethereum) return false;
+    const provider = (window as any).rabby || (window as any).ethereum;
+    if (!provider) return false;
     try {
-      await window.ethereum.request({
+      await provider.request({
         method: "wallet_switchEthereumChain",
         params: [{ chainId: SEPOLIA_CHAIN_ID_HEX }],
       });
       return true;
     } catch (switchError: any) {
-      // Chain not added to MetaMask (error 4902)
+      // Chain not added (error 4902)
       if (switchError.code === 4902) {
         try {
-          await window.ethereum.request({
+          await provider.request({
             method: "wallet_addEthereumChain",
             params: [
               {
