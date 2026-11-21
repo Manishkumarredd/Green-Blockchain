@@ -112,11 +112,38 @@ export function useMetaMask() {
   }, []);
 
   // Request connection
-  const connectWallet = useCallback(async (): Promise<string | null> => {
-    if (typeof window === "undefined" || !window.ethereum) {
+  const connectWallet = useCallback(async (preferredWallet?: string): Promise<string | null> => {
+    if (typeof window === "undefined") {
       setState((prev) => ({
         ...prev,
-        error: "MetaMask is not installed. Please install the MetaMask extension.",
+        error: "Web3 environment not available.",
+      }));
+      return null;
+    }
+
+    // Resolve specific wallet provider (MetaMask, Rabby, Coinbase)
+    let provider: any = (window as any).ethereum;
+    if (preferredWallet === "rabby" && (window as any).rabby) {
+      provider = (window as any).rabby;
+    } else if (preferredWallet === "coinbase" && (window as any).coinbaseWalletExtension) {
+      provider = (window as any).coinbaseWalletExtension;
+    } else if (provider?.providers && Array.isArray(provider.providers)) {
+      if (preferredWallet === "rabby") {
+        const found = provider.providers.find((p: any) => p.isRabby);
+        if (found) provider = found;
+      } else if (preferredWallet === "coinbase") {
+        const found = provider.providers.find((p: any) => p.isCoinbaseWallet);
+        if (found) provider = found;
+      } else if (preferredWallet === "metamask") {
+        const found = provider.providers.find((p: any) => p.isMetaMask && !p.isRabby);
+        if (found) provider = found;
+      }
+    }
+
+    if (!provider) {
+      setState((prev) => ({
+        ...prev,
+        error: "Selected Web3 wallet is not installed.",
       }));
       return null;
     }
@@ -124,7 +151,7 @@ export function useMetaMask() {
     setState((prev) => ({ ...prev, isConnecting: true, error: null }));
 
     try {
-      const accounts = (await window.ethereum.request({
+      const accounts = (await provider.request({
         method: "eth_requestAccounts",
       })) as string[];
 
@@ -133,7 +160,7 @@ export function useMetaMask() {
       }
 
       const address = accounts[0];
-      const chainId = (await window.ethereum.request({ method: "eth_chainId" })) as string;
+      const chainId = (await provider.request({ method: "eth_chainId" })) as string;
       const isSepolia = isSupportedChain(chainId);
 
       setState({

@@ -55,7 +55,7 @@ export const WalletButton: React.FC = () => {
     };
     setSelectedWalletName(walletLabels[walletId] || "Web3 Wallet");
 
-    const connectedAddress = await connectWallet();
+    const connectedAddress = await connectWallet(walletId);
     if (connectedAddress) {
       setIsModalOpen(false);
       addToast({

@@ -62,20 +62,33 @@ export const ConnectWalletModal: React.FC<ConnectWalletModalProps> = ({
 
   // Detect which wallets are installed in the user's browser
   const checkInstalled = (walletId: string): boolean => {
-    if (typeof window === "undefined" || !window.ethereum) return false;
-    const eth = window.ethereum as any;
+    if (typeof window === "undefined") return false;
+    const eth = (window as any).ethereum;
+    const rabby = (window as any).rabby;
+    const coinbase = (window as any).coinbaseWalletExtension;
 
-    if (walletId === "metamask") {
-      return Boolean(eth.isMetaMask && !eth.isRabby && !eth.isBraveWallet);
+    if (walletId === "rabby") {
+      return Boolean(
+        rabby ||
+        eth?.isRabby ||
+        (eth?.providers && eth.providers.some((p: any) => p.isRabby))
+      );
     }
     if (walletId === "coinbase") {
-      return Boolean(eth.isCoinbaseWallet || (window as any).coinbaseWalletExtension);
-    }
-    if (walletId === "rabby") {
-      return Boolean(eth.isRabby);
+      return Boolean(
+        coinbase ||
+        eth?.isCoinbaseWallet ||
+        (eth?.providers && eth.providers.some((p: any) => p.isCoinbaseWallet))
+      );
     }
     if (walletId === "brave") {
-      return Boolean(eth.isBraveWallet);
+      return Boolean(eth?.isBraveWallet || (window as any).braveEthereum);
+    }
+    if (walletId === "metamask") {
+      return Boolean(
+        (eth?.isMetaMask && !eth?.isRabby && !eth?.isBraveWallet) ||
+        (eth?.providers && eth.providers.some((p: any) => p.isMetaMask && !p.isRabby))
+      );
     }
     return Boolean(eth);
   };
