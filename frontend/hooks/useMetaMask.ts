@@ -54,14 +54,16 @@ export function useMetaMask() {
         isInstalled,
       }));
 
-      if (window.ethereum) {
+      const activeProvider: any = (window as any).rabby || window.ethereum;
+
+      if (activeProvider) {
         // Query existing connected accounts without prompting
-        window.ethereum
+        activeProvider
           .request({ method: "eth_accounts" })
-          .then((accounts: string[]) => {
+          .then(async (accounts: string[]) => {
             if (accounts && accounts.length > 0) {
               const address = accounts[0];
-              const chainId = window.ethereum.chainId;
+              const chainId = (await activeProvider.request({ method: "eth_chainId" }).catch(() => activeProvider.chainId)) as string;
               setState((prev) => ({
                 ...prev,
                 isConnected: true,
@@ -100,11 +102,13 @@ export function useMetaMask() {
           }));
         };
 
-        window.ethereum.on?.("accountsChanged", handleAccountsChanged);
-        window.ethereum.on?.("chainChanged", handleChainChanged);
+        activeProvider.on?.("accountsChanged", handleAccountsChanged);
+        activeProvider.on?.("chainChanged", handleChainChanged);
+        window.ethereum?.on?.("chainChanged", handleChainChanged);
 
         return () => {
-          window.ethereum?.removeListener?.("accountsChanged", handleAccountsChanged);
+          activeProvider.removeListener?.("accountsChanged", handleAccountsChanged);
+          activeProvider.removeListener?.("chainChanged", handleChainChanged);
           window.ethereum?.removeListener?.("chainChanged", handleChainChanged);
         };
       }
@@ -196,18 +200,19 @@ export function useMetaMask() {
 
   // Switch to Sepolia Testnet
   const switchToSepolia = useCallback(async (): Promise<boolean> => {
-    if (!window.ethereum) return false;
+    const provider = (window as any).rabby || (window as any).ethereum;
+    if (!provider) return false;
     try {
-      await window.ethereum.request({
+      await provider.request({
         method: "wallet_switchEthereumChain",
         params: [{ chainId: SEPOLIA_CHAIN_ID_HEX }],
       });
       return true;
     } catch (switchError: any) {
-      // Chain not added to MetaMask (error 4902)
+      // Chain not added (error 4902)
       if (switchError.code === 4902) {
         try {
-          await window.ethereum.request({
+          await provider.request({
             method: "wallet_addEthereumChain",
             params: [
               {
