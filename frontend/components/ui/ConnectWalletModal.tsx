@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   X,
   Smartphone,
@@ -40,6 +41,11 @@ export const ConnectWalletModal: React.FC<ConnectWalletModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<"desktop" | "mobile">("desktop");
   const [selectedWallet, setSelectedWallet] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Close on Escape key
   useEffect(() => {
@@ -52,7 +58,7 @@ export const ConnectWalletModal: React.FC<ConnectWalletModalProps> = ({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
   // Detect which wallets are installed in the user's browser
   const checkInstalled = (walletId: string): boolean => {
@@ -116,8 +122,8 @@ export const ConnectWalletModal: React.FC<ConnectWalletModalProps> = ({
     await onSelectWallet(walletId);
   };
 
-  return (
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-md animate-fadeIn overflow-y-auto">
+  return createPortal(
+    <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-md animate-fadeIn overflow-y-auto">
       <div
         className="relative w-full max-w-lg bg-white dark:bg-navy-900 rounded-3xl border border-navy-200 dark:border-navy-800 shadow-2xl overflow-hidden my-auto animate-scaleIn max-h-[92vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
@@ -284,6 +290,7 @@ export const ConnectWalletModal: React.FC<ConnectWalletModalProps> = ({
           <span className="font-semibold text-brand-600 dark:text-brand-400">Chain ID: 11155111</span>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
