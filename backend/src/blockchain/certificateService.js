@@ -62,10 +62,49 @@ async function verifyCertificate(certificateId) {
     const baseEnergy = dbRecord ? Number(dbRecord.energy_quantity_kwh) : 80;
     const carbonSaved = dbRecord ? Number(dbRecord.carbon_savings) : 65.6;
 
+    // Dynamically look up transaction and producer/consumer details
+    let txRecord = null;
+    let producerUser = null;
+    let consumerUser = null;
+
+    if (dbRecord?.transaction_id) {
+      txRecord = inMemoryStore.energy_transactions.find(
+        (t) => Number(t.id) === Number(dbRecord.transaction_id)
+      );
+    }
+
+    if (txRecord) {
+      producerUser = inMemoryStore.users.find(
+        (u) => Number(u.id) === Number(txRecord.producer_id)
+      );
+      consumerUser = inMemoryStore.users.find(
+        (u) => Number(u.id) === Number(txRecord.consumer_id)
+      );
+    }
+
+    if (!consumerUser && dbRecord?.owner_id) {
+      consumerUser = inMemoryStore.users.find(
+        (u) => Number(u.id) === Number(dbRecord.owner_id)
+      );
+    }
+
+    const producerAddress =
+      txRecord?.producer_wallet ||
+      producerUser?.wallet_address ||
+      "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+
+    const consumerAddress =
+      txRecord?.consumer_wallet ||
+      consumerUser?.wallet_address ||
+      dbRecord?.owner_wallet ||
+      "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc";
+
     onChainData = {
       tokenId: id,
-      producer: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-      consumer: dbRecord?.owner_wallet || "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc",
+      producer: producerAddress,
+      producerName: producerUser?.full_name || "Helios Solar Park",
+      consumer: consumerAddress,
+      consumerName: consumerUser?.full_name || dbRecord?.owner_name || "Metro Green Hospital",
       energyAmountKwh: baseEnergy,
       carbonSavedGrams: Math.round(carbonSaved * 1000),
       energySource: "SOLAR",
@@ -91,7 +130,9 @@ async function verifyCertificate(certificateId) {
       energySource: onChainData.energySource,
       issuanceDate: onChainData.issuanceTimestamp,
       producerAddress: onChainData.producer,
+      producerName: onChainData.producerName || "Helios Solar Park",
       consumerAddress: onChainData.consumer,
+      consumerName: onChainData.consumerName || "Metro Green Hospital",
       tradeSettlementHash: txHash,
       isRetired: onChainData.isRetired,
       status: onChainData.isRetired ? "RETIRED" : "VERIFIED_ACTIVE"

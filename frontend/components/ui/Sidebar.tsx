@@ -51,19 +51,7 @@ export const Sidebar: React.FC<{ activeNavId?: string; onNavSelect?: (id: string
     } catch (_) {}
   }, [role]);
 
-  const handleRoleChange = async (targetRole: UserRole) => {
-    setRole(targetRole);
-    try {
-      await authApi.switchDemoRole(targetRole);
-      const stored = typeof window !== "undefined"
-        ? (localStorage.getItem("greenledger_user") || localStorage.getItem("user"))
-        : null;
-      if (stored) {
-        setCurrentUser(JSON.parse(stored));
-      }
-    } catch (_) {}
-    router.push(`/${targetRole.toLowerCase()}/dashboard`);
-  };
+
 
   const handleLogout = () => {
     if (typeof window !== "undefined") {
@@ -85,7 +73,6 @@ export const Sidebar: React.FC<{ activeNavId?: string; onNavSelect?: (id: string
     { id: "telemetry", label: "Generation Feeds", icon: Activity, badge: "Live" },
     { id: "listings", label: "Energy Listings", icon: PlusCircle, badge: "P2P" },
     { id: "settlements", label: "Settlement Payouts", icon: Coins },
-    { id: "settings", label: "Microgrid Settings", icon: Settings },
   ];
 
   const consumerNav: NavItem[] = [
@@ -151,28 +138,10 @@ export const Sidebar: React.FC<{ activeNavId?: string; onNavSelect?: (id: string
             <Logo size="md" />
           </div>
 
-          {/* Quick Role Switcher Pill */}
+          {/* Active Portal Role Badge */}
           <div className="p-4 border-b border-navy-100 dark:border-navy-800/60">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-navy-400 mb-1.5 block">
-              Active Portal Role
-            </label>
-            <div className="grid grid-cols-3 gap-1 bg-navy-100 dark:bg-navy-800 p-1 rounded-xl">
-              {(["PRODUCER", "CONSUMER", "ADMIN"] as UserRole[]).map((r) => (
-                <button
-                  key={r}
-                  onClick={() => handleRoleChange(r)}
-                  className={`py-1 text-[11px] font-bold rounded-lg transition cursor-pointer ${
-                    role === r
-                      ? "bg-white dark:bg-navy-900 text-brand-600 dark:text-brand-400 shadow-sm"
-                      : "text-navy-500 hover:text-navy-900 dark:hover:text-white"
-                  }`}
-                >
-                  {r === "PRODUCER" ? "Prod" : r === "CONSUMER" ? "Cons" : "Admin"}
-                </button>
-              ))}
-            </div>
-            <div className={`mt-2 py-1 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-between ${roleMeta.color}`}>
-              <span>{roleMeta.label}</span>
+            <div className={`py-1.5 px-3 rounded-xl text-xs font-semibold flex items-center justify-between ${roleMeta.color}`}>
+              <span className="font-bold">{roleMeta.label}</span>
               <span className="w-2 h-2 rounded-full bg-brand-500 animate-pulse"></span>
             </div>
           </div>
