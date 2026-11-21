@@ -23,6 +23,7 @@ import {
   ShoppingBag,
 } from "lucide-react";
 import { PublicLayout } from "../../components/layout/PublicLayout";
+import { DashboardLayout } from "../../components/layout/DashboardLayout";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
@@ -52,6 +53,14 @@ export default function MarketplacePage() {
   const [error, setError] = useState<string | null>(null);
   const [listings, setListings] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const token = localStorage.getItem("greenledger_auth_token") || localStorage.getItem("greenledger_jwt");
+      setIsAuthenticated(Boolean(token));
+    }
+  }, []);
 
   // Filters & Pagination
   const [search, setSearch] = useState("");
@@ -163,8 +172,10 @@ export default function MarketplacePage() {
     }
   };
 
+  const Layout = isAuthenticated ? DashboardLayout : PublicLayout;
+
   return (
-    <PublicLayout>
+    <Layout {...(isAuthenticated ? { activeNavId: "marketplace" } : {})}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
         {/* Marketplace Header */}
         <div className="bg-gradient-to-br from-navy-900 via-navy-950 to-brand-950 rounded-3xl p-8 sm:p-10 text-white relative overflow-hidden shadow-xl border border-navy-800">
@@ -515,6 +526,6 @@ export default function MarketplacePage() {
           </div>
         )}
       </div>
-    </PublicLayout>
+    </Layout>
   );
 }

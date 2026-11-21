@@ -37,7 +37,9 @@ interface CertificateVerification {
     energySource: string;
     issuanceDate: string;
     producerAddress: string;
+    producerName?: string;
     consumerAddress: string;
+    consumerName?: string;
     tradeSettlementHash: string;
     isRetired: boolean;
     status: string;
@@ -329,34 +331,78 @@ export default function VerifyCertificatePage() {
 
                   {/* Producer & Beneficiary Grid */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-navy-950 border border-navy-100 dark:border-navy-800">
-                      <span className="text-[11px] font-bold text-navy-400 uppercase">Energy Producer (Origin)</span>
-                      <p className="font-mono text-xs text-navy-900 dark:text-navy-100 break-all mt-0.5">
-                        {data.metadata.producerAddress}
+                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-navy-950 border border-navy-100 dark:border-navy-800 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase flex items-center gap-1.5">
+                          <Zap className="w-3.5 h-3.5" />
+                          Energy Producer (Seller)
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                          {data.metadata.producerName || "Helios Solar Park"}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-navy-500 dark:text-navy-400">
+                        Public key hash of the renewable energy plant that generated this electricity:
                       </p>
-                      <a
-                        href={`https://sepolia.etherscan.io/address/${data.metadata.producerAddress}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600 dark:text-brand-400 hover:underline mt-1.5"
-                      >
-                        View Account <ExternalLink className="w-2.5 h-2.5" />
-                      </a>
+                      <div className="flex items-center justify-between bg-white dark:bg-navy-900 p-2 rounded-xl border border-navy-200 dark:border-navy-800">
+                        <span className="font-mono text-xs text-navy-900 dark:text-navy-100 truncate">
+                          {data.metadata.producerAddress}
+                        </span>
+                        <button
+                          onClick={() => copyToClipboard(data.metadata.producerAddress, "producer")}
+                          className="p-1 text-navy-400 hover:text-navy-700 dark:hover:text-white rounded transition ml-1 shrink-0"
+                          title="Copy address"
+                        >
+                          {copiedField === "producer" ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                      <div className="pt-0.5">
+                        <a
+                          href={`https://sepolia.etherscan.io/address/${data.metadata.producerAddress}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600 dark:text-brand-400 hover:underline"
+                        >
+                          View Account on Sepolia Etherscan <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      </div>
                     </div>
 
-                    <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-navy-950 border border-navy-100 dark:border-navy-800">
-                      <span className="text-[11px] font-bold text-navy-400 uppercase">Green Beneficiary (Consumer)</span>
-                      <p className="font-mono text-xs text-navy-900 dark:text-navy-100 break-all mt-0.5">
-                        {data.metadata.consumerAddress}
+                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-navy-950 border border-navy-100 dark:border-navy-800 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase flex items-center gap-1.5">
+                          <User className="w-3.5 h-3.5" />
+                          Green Beneficiary (Buyer)
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                          {data.metadata.consumerName || "Metro Green Hospital"}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-navy-500 dark:text-navy-400">
+                        Public key hash of the consumer holding legal ownership of this certificate:
                       </p>
-                      <a
-                        href={`https://sepolia.etherscan.io/address/${data.metadata.consumerAddress}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600 dark:text-brand-400 hover:underline mt-1.5"
-                      >
-                        View Account <ExternalLink className="w-2.5 h-2.5" />
-                      </a>
+                      <div className="flex items-center justify-between bg-white dark:bg-navy-900 p-2 rounded-xl border border-navy-200 dark:border-navy-800">
+                        <span className="font-mono text-xs text-navy-900 dark:text-navy-100 truncate">
+                          {data.metadata.consumerAddress}
+                        </span>
+                        <button
+                          onClick={() => copyToClipboard(data.metadata.consumerAddress, "consumer")}
+                          className="p-1 text-navy-400 hover:text-navy-700 dark:hover:text-white rounded transition ml-1 shrink-0"
+                          title="Copy address"
+                        >
+                          {copiedField === "consumer" ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                      <div className="pt-0.5">
+                        <a
+                          href={`https://sepolia.etherscan.io/address/${data.metadata.consumerAddress}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600 dark:text-brand-400 hover:underline"
+                        >
+                          View Account on Sepolia Etherscan <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      </div>
                     </div>
                   </div>
                 </div>

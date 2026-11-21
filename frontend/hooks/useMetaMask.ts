@@ -4,6 +4,22 @@ import { useState, useEffect, useCallback } from "react";
 
 export const SEPOLIA_CHAIN_ID_HEX = "0xaa36a7"; // 11155111 in hex
 export const SEPOLIA_CHAIN_ID_DEC = 11155111;
+export const HARDHAT_CHAIN_ID_HEX = "0x7a69"; // 31337 in hex
+export const HARDHAT_CHAIN_ID_DEC = 31337;
+
+export function isSupportedChain(chainId: string | null): boolean {
+  if (!chainId) return false;
+  const dec = parseInt(chainId, 16);
+  const hex = chainId.toLowerCase();
+  return (
+    hex === SEPOLIA_CHAIN_ID_HEX ||
+    dec === SEPOLIA_CHAIN_ID_DEC ||
+    hex === HARDHAT_CHAIN_ID_HEX ||
+    dec === HARDHAT_CHAIN_ID_DEC ||
+    dec === 1337 ||
+    hex === "0x539"
+  );
+}
 
 export interface MetaMaskState {
   isInstalled: boolean;
@@ -51,7 +67,7 @@ export function useMetaMask() {
                 isConnected: true,
                 address,
                 chainId,
-                isSepolia: chainId === SEPOLIA_CHAIN_ID_HEX || parseInt(chainId, 16) === SEPOLIA_CHAIN_ID_DEC,
+                isSepolia: isSupportedChain(chainId),
               }));
             }
           })
@@ -76,7 +92,7 @@ export function useMetaMask() {
 
         // Listen for network / chain changes
         const handleChainChanged = (chainId: string) => {
-          const isSepolia = chainId === SEPOLIA_CHAIN_ID_HEX || parseInt(chainId, 16) === SEPOLIA_CHAIN_ID_DEC;
+          const isSepolia = isSupportedChain(chainId);
           setState((prev) => ({
             ...prev,
             chainId,
@@ -118,7 +134,7 @@ export function useMetaMask() {
 
       const address = accounts[0];
       const chainId = (await window.ethereum.request({ method: "eth_chainId" })) as string;
-      const isSepolia = chainId === SEPOLIA_CHAIN_ID_HEX || parseInt(chainId, 16) === SEPOLIA_CHAIN_ID_DEC;
+      const isSepolia = isSupportedChain(chainId);
 
       setState({
         isInstalled: true,

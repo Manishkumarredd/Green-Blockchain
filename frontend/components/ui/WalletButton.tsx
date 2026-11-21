@@ -124,7 +124,7 @@ export const WalletButton: React.FC = () => {
               : "bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400"
           }`}
         >
-          {isSepolia ? "Sepolia" : "Wrong Network"}
+          {isSepolia ? "Connected" : "Wrong Network"}
         </span>
       </button>
 
@@ -147,7 +147,7 @@ export const WalletButton: React.FC = () => {
                   isSepolia ? "bg-emerald-500" : "bg-amber-500"
                 }`}
               />
-              {isSepolia ? "Sepolia Active" : "Unsupported Network"}
+              {isSepolia ? "Active Network" : "Unsupported Network"}
             </span>
           </div>
 
