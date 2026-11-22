@@ -2,12 +2,12 @@
   "testEnvironment": {
     "platform": "win32",
     "arch": "x64",
-    "nodeVersion": "v24.15.0",
-    "cpuCores": 16,
-    "memoryTotalGb": "15.70"
+    "nodeVersion": "v24.11.1",
+    "cpuCores": 12,
+    "memoryTotalGb": "15.23"
   },
   "pricingBenchmark": {
-    "latencyMs": 0.005,
+    "latencyMs": 0.0031,
     "samplePrice": {
       "referencePriceEth": 0.0001,
       "baseTariffEth": 0.0001,
@@ -77,9 +77,9 @@
           "daWpa": 249.9999
         },
         "runtimeMs": {
-          "fcfs": 0.0273,
-          "bpa": 0.0349,
-          "daWpa": 0.0454
+          "fcfs": 0.0366,
+          "bpa": 0.0264,
+          "daWpa": 0.043
         }
       }
     },
@@ -128,9 +128,9 @@
           "daWpa": 412.5
         },
         "runtimeMs": {
-          "fcfs": 0.0294,
-          "bpa": 0.0222,
-          "daWpa": 0.014
+          "fcfs": 0.0164,
+          "bpa": 0.0081,
+          "daWpa": 0.0187
         }
       }
     },
@@ -179,9 +179,9 @@
           "daWpa": 500
         },
         "runtimeMs": {
-          "fcfs": 0.035,
-          "bpa": 0.028,
-          "daWpa": 0.0495
+          "fcfs": 0.016,
+          "bpa": 0.0197,
+          "daWpa": 0.0146
         }
       }
     },
@@ -230,9 +230,9 @@
           "daWpa": 399.9998
         },
         "runtimeMs": {
-          "fcfs": 0.0485,
-          "bpa": 0.0253,
-          "daWpa": 0.0517
+          "fcfs": 0.0139,
+          "bpa": 0.0178,
+          "daWpa": 0.0184
         }
       }
     },
@@ -281,9 +281,9 @@
           "daWpa": 499.9999
         },
         "runtimeMs": {
-          "fcfs": 0.0249,
-          "bpa": 0.0579,
-          "daWpa": 0.0198
+          "fcfs": 0.014,
+          "bpa": 0.0158,
+          "daWpa": 0.0157
         }
       }
     },
@@ -332,9 +332,9 @@
           "daWpa": 350
         },
         "runtimeMs": {
-          "fcfs": 0.0187,
-          "bpa": 0.0252,
-          "daWpa": 0.0508
+          "fcfs": 0.0135,
+          "bpa": 0.0145,
+          "daWpa": 0.0172
         }
       }
     },
@@ -348,9 +348,9 @@
           "totalSupplyKwh": 400,
           "totalDemandKwh": 647.5999999999999,
           "runtimeMs": {
-            "fcfs": 0.0363,
-            "bpa": 0.0258,
-            "daWpa": 0.0451
+            "fcfs": 0.0154,
+            "bpa": 0.018,
+            "daWpa": 0.0166
           },
           "jainsIndex": {
             "fcfs": 0.5966,
@@ -368,9 +368,9 @@
           "totalSupplyKwh": 1000,
           "totalDemandKwh": 1414.1999999999998,
           "runtimeMs": {
-            "fcfs": 0.0579,
-            "bpa": 0.1204,
-            "daWpa": 0.0579
+            "fcfs": 0.0362,
+            "bpa": 0.0376,
+            "daWpa": 0.0524
           },
           "jainsIndex": {
             "fcfs": 0.7019,
@@ -388,9 +388,9 @@
           "totalSupplyKwh": 2000,
           "totalDemandKwh": 2778.5999999999995,
           "runtimeMs": {
-            "fcfs": 0.2009,
-            "bpa": 0.1884,
-            "daWpa": 0.1735
+            "fcfs": 0.0585,
+            "bpa": 0.0791,
+            "daWpa": 0.0895
           },
           "jainsIndex": {
             "fcfs": 0.6981,
@@ -408,9 +408,9 @@
           "totalSupplyKwh": 4000,
           "totalDemandKwh": 5820.599999999998,
           "runtimeMs": {
-            "fcfs": 0.2351,
-            "bpa": 0.3302,
-            "daWpa": 0.3145
+            "fcfs": 0.1176,
+            "bpa": 0.1369,
+            "daWpa": 0.1182
           },
           "jainsIndex": {
             "fcfs": 0.6806,
@@ -428,9 +428,9 @@
           "totalSupplyKwh": 8000,
           "totalDemandKwh": 11203.099999999997,
           "runtimeMs": {
-            "fcfs": 0.5998,
-            "bpa": 0.578,
-            "daWpa": 0.6039
+            "fcfs": 0.3245,
+            "bpa": 0.3154,
+            "daWpa": 0.2561
           },
           "jainsIndex": {
             "fcfs": 0.7061,
@@ -453,40 +453,40 @@
         {
           "listingsCount": 5,
           "consumersCount": 100,
-          "runtimeMs": 0.3065,
+          "runtimeMs": 0.1409,
           "matchedTradesCount": 0,
           "totalMatchedKwh": 500
         },
         {
           "listingsCount": 10,
           "consumersCount": 100,
-          "runtimeMs": 0.4302,
+          "runtimeMs": 0.1988,
           "matchedTradesCount": 0,
           "totalMatchedKwh": 1000
         },
         {
           "listingsCount": 20,
           "consumersCount": 100,
-          "runtimeMs": 0.7299,
+          "runtimeMs": 0.4888,
           "matchedTradesCount": 0,
           "totalMatchedKwh": 2000
         },
         {
           "listingsCount": 35,
           "consumersCount": 100,
-          "runtimeMs": 0.8155,
+          "runtimeMs": 0.4912,
           "matchedTradesCount": 0,
           "totalMatchedKwh": 3500
         },
         {
           "listingsCount": 50,
           "consumersCount": 100,
-          "runtimeMs": 0.9434,
+          "runtimeMs": 0.5681,
           "matchedTradesCount": 0,
           "totalMatchedKwh": 3500
         }
       ]
     }
   ],
-  "executedAt": "2026-11-17T06:55:49.192Z"
+  "executedAt": "2026-11-22T12:45:13.493Z"
 }
