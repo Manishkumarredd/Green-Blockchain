@@ -33,7 +33,11 @@ function allocateDemandAwareWeightedProportional(requests, availableSupplyKwh, o
     const emptyAllocations = (requests || []).map((r) => ({
       id: r.id,
       consumerId: r.consumerId || r.id,
+      consumerName: r.consumerName || `Consumer ${r.id}`,
+      priorityTier: r.priorityTier || (Number(r.priorityWeight) >= 2.0 ? "CRITICAL" : Number(r.priorityWeight) >= 1.5 ? "COMMERCIAL" : "STANDARD"),
       requestedKwh: Number(r.requestedKwh || 0),
+      initialAllocationKwh: 0,
+      redistributedKwh: 0,
       allocatedKwh: 0,
       unfulfilledKwh: Number(r.requestedKwh || 0),
       fulfillmentRatio: 0.0,
@@ -65,7 +69,11 @@ function allocateDemandAwareWeightedProportional(requests, availableSupplyKwh, o
       return {
         id: r.id,
         consumerId: r.consumerId || r.id,
+        consumerName: r.consumerName || `Consumer ${r.id}`,
+        priorityTier: r.priorityTier || (Number(r.priorityWeight) >= 2.0 ? "CRITICAL" : Number(r.priorityWeight) >= 1.5 ? "COMMERCIAL" : "STANDARD"),
         requestedKwh: d,
+        initialAllocationKwh: d,
+        redistributedKwh: 0,
         allocatedKwh: d,
         unfulfilledKwh: 0,
         fulfillmentRatio: 1.0,
@@ -96,9 +104,13 @@ function allocateDemandAwareWeightedProportional(requests, availableSupplyKwh, o
   const activeQueue = requests.map((r) => ({
     id: r.id,
     consumerId: r.consumerId || r.id,
+    consumerName: r.consumerName || `Consumer ${r.id}`,
+    priorityTier: r.priorityTier || (Number(r.priorityWeight) >= 2.0 ? "CRITICAL" : Number(r.priorityWeight) >= 1.5 ? "COMMERCIAL" : "STANDARD"),
     requestedKwh: Math.max(0, Number(r.requestedKwh || 0)),
     priorityWeight: Math.max(0.1, Number(r.priorityWeight || 1.0)),
     allocatedKwh: 0,
+    initialAllocationKwh: 0,
+    redistributedKwh: 0,
     isSatisfied: false,
   }));
 
@@ -128,6 +140,11 @@ function allocateDemandAwareWeightedProportional(requests, availableSupplyKwh, o
       // Apply strict demand cap: x_i = min(d_i - x_i, proportionalShare)
       const allocatedDelta = Math.min(remainingNeed, proportionalShare);
       req.allocatedKwh += allocatedDelta;
+      if (round === 1) {
+        req.initialAllocationKwh = allocatedDelta;
+      } else {
+        req.redistributedKwh += allocatedDelta;
+      }
       distributedInRound += allocatedDelta;
 
       if (req.allocatedKwh >= req.requestedKwh - 0.0001) {
@@ -145,10 +162,16 @@ function allocateDemandAwareWeightedProportional(requests, availableSupplyKwh, o
   const finalAllocations = activeQueue.map((r) => {
     const alloc = Number(r.allocatedKwh.toFixed(4));
     const req = Number(r.requestedKwh.toFixed(4));
+    const initAlloc = Number((r.initialAllocationKwh || 0).toFixed(4));
+    const redist = Number((r.redistributedKwh || 0).toFixed(4));
     return {
       id: r.id,
       consumerId: r.consumerId,
+      consumerName: r.consumerName,
+      priorityTier: r.priorityTier,
       requestedKwh: req,
+      initialAllocationKwh: initAlloc,
+      redistributedKwh: redist,
       allocatedKwh: alloc,
       unfulfilledKwh: Number(Math.max(0, req - alloc).toFixed(4)),
       fulfillmentRatio: req > 0 ? Number((alloc / req).toFixed(4)) : 1.0,
@@ -202,7 +225,11 @@ function allocateFCFS(requests, availableSupplyKwh) {
     allocations.push({
       id: r.id,
       consumerId: r.consumerId || r.id,
+      consumerName: r.consumerName || `Consumer ${r.id}`,
+      priorityTier: r.priorityTier || (Number(r.priorityWeight) >= 2.0 ? "CRITICAL" : Number(r.priorityWeight) >= 1.5 ? "COMMERCIAL" : "STANDARD"),
       requestedKwh: req,
+      initialAllocationKwh: Number(alloc.toFixed(4)),
+      redistributedKwh: 0,
       allocatedKwh: Number(alloc.toFixed(4)),
       unfulfilledKwh: Number(Math.max(0, req - alloc).toFixed(4)),
       fulfillmentRatio: req > 0 ? Number((alloc / req).toFixed(4)) : 1.0,

@@ -1,6 +1,6 @@
 const db = require("../config/db");
 const { AppError } = require("../utils/errorHandler");
-const { runExperimentScenario, RESEARCH_SCENARIOS } = require("../algorithms/algorithmUtils");
+const { runExperimentScenario, RESEARCH_SCENARIOS, RESEARCH_BENCHMARK_SCENARIOS } = require("../algorithms/algorithmUtils");
 
 class AdminService {
   /**
@@ -1048,6 +1048,7 @@ class AdminService {
     const { scenarioKey = null } = queryParams;
 
     const availableScenarios = Object.values(RESEARCH_SCENARIOS);
+    const benchmarkScenarios8 = Object.values(RESEARCH_BENCHMARK_SCENARIOS || {});
     const targetKeys = scenarioKey ? [scenarioKey] : Object.keys(RESEARCH_SCENARIOS);
 
     const experimentRuns = [];
@@ -1061,6 +1062,7 @@ class AdminService {
       disclaimer: "RESEARCH SIMULATION DATA: Experiments use deterministic mathematical models with fixed random seeds for academic reproducibility. Data is explicitly isolated from real settlement ledgers.",
       scenariosCount: availableScenarios.length,
       availableScenarios,
+      benchmarkScenarios8,
       activeScenario: experimentRuns[0] || null,
       allExperiments: experimentRuns,
       timestamp: new Date(),
@@ -1071,19 +1073,19 @@ class AdminService {
    * Research Analytics CSV Export: Outputs RFC 4180 compliant CSV stream
    */
   async exportResearchAnalyticsCsv() {
-    const scenarioKeys = Object.keys(RESEARCH_SCENARIOS);
+    const scenariosToExport = Object.values(RESEARCH_BENCHMARK_SCENARIOS || RESEARCH_SCENARIOS);
     const rows = [
       ["Scenario_ID", "Scenario_Name", "Metric", "FCFS_Baseline", "BPA_Baseline", "DA_WPA_Proposed", "Unit", "Timestamp"],
     ];
 
-    for (const key of scenarioKeys) {
-      const run = runExperimentScenario(key);
+    for (const sc of scenariosToExport) {
+      const run = runExperimentScenario(sc.id || sc.alias);
       const scName = run.scenario.name.replace(/,/g, ";");
       const ts = new Date().toISOString();
 
       for (const item of run.comparisonTable) {
         rows.push([
-          key,
+          sc.id || sc.alias,
           `"${scName}"`,
           `"${item.metric}"`,
           item.fcfs,
